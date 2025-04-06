@@ -4,7 +4,6 @@ import PyPDF2
 import time
 import requests
 
-# Ensure you have Streamlit >= 1.74 for st.chat_xxx APIs
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
     page_icon="🌍🧭",
@@ -49,7 +48,7 @@ def upload_and_index_file(pdf_file_path):
     return vector_store
 
 def duckduckgo_web_search(query):
-    """Performs a search using DuckDuckGo Instant Answer API.
+    """Performs a search using the DuckDuckGo Instant Answer API.
        Returns top result snippets as a combined string.
     """
     params = {
@@ -86,13 +85,15 @@ def create_assistant_with_vector_store(vector_store):
     return assistant
 
 def generate_answer(assistant_id, conversation_history, user_question):
-    """Generates an answer using conversation history and the current user question.
-       If the response indicates insufficient internal data, perform a DuckDuckGo web search.
+    """
+    Generates an answer using conversation history and the current user question.
+    If the response indicates insufficient internal data (by including "answer not available in context"),
+    it asks a clarifying follow-up question, e.g., "How many nights are you planning to stay?"
     """
     messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
     
-    # Create a thread for the conversation.
+    # Create a conversation thread.
     thread = client.beta.threads.create(messages=messages)
     answer = ""
     start_time = time.time()
@@ -105,22 +106,23 @@ def generate_answer(assistant_id, conversation_history, user_question):
                         answer += delta_block.text.value
     end_time = time.time()
     
-    # If internal context is insufficient, do a live DuckDuckGo web search.
+    # Check if internal documents lack the required details.
     if "answer not available in context" in answer.lower():
-        web_data = duckduckgo_web_search(user_question)
-        answer += "\n\nAdditional live information from DuckDuckGo:\n" + web_data
+        # Instead of performing a web search, ask a clarifying question.
+        clarifying_question = ("It appears that our internal documents don't contain specific travel details for your query. "
+                                "Could you please tell me how many nights you plan to stay?")
+        answer = clarifying_question
 
     return answer
 
 def main():
-    st.title("TravClan Navigator 🌍🧭")
-    st.write("Welcome to your Travel Assistant with a Chat UI!")
-
-    # Maintain conversation history in session state.
+    st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
+    
+    # Use session state to store conversation history.
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
-
-    # Index the PDF and create the assistant only once.
+    
+    # Upload and index the PDF and create the assistant only once.
     if "vector_store" not in st.session_state:
         with st.spinner("Indexing travel documents..."):
             vector_store = upload_and_index_file(PDF_FILE_PATH)
@@ -129,8 +131,8 @@ def main():
             st.session_state.assistant = assistant
     else:
         assistant = st.session_state.assistant
-
-    # Display existing chat messages in session
+    
+    # Display existing chat messages using Streamlit's chat UI.
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
@@ -138,21 +140,18 @@ def main():
         else:
             with st.chat_message("assistant"):
                 st.write(msg["content"])
-
-    # Use st.chat_input for user input (Streamlit 1.74+)
-    user_question = st.chat_input("Type your question here...")
-
+    
+    # Use st.chat_input for user input (requires Streamlit >= 1.74)
+    user_question = st.chat_input("Type your travel question here...")
+    
     if user_question:
         with st.chat_message("user"):
             st.write(user_question)
         with st.spinner("Processing your query..."):
             answer = generate_answer(assistant.id, st.session_state.conversation_history, user_question)
-        
-        # Update session state with new messages
+        # Update conversation history.
         st.session_state.conversation_history.append({"role": "user", "content": user_question})
         st.session_state.conversation_history.append({"role": "assistant", "content": answer})
-
-        # Display the assistant's response
         with st.chat_message("assistant"):
             st.write(answer)
 
