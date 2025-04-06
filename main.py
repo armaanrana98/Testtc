@@ -4,7 +4,6 @@ import PyPDF2
 import time
 import requests
 
-# Set up page configuration.
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
     page_icon="🌍🧭",
@@ -13,70 +12,81 @@ st.set_page_config(
 )
 
 PDF_FILE_PATH = "data.pdf"
-LOGO_PATH = "travclan_logo.PNG"  
+LOGO_PATH = "travclan_logo.png"  # Replace with your actual logo filename
 
-# Retrieve API key from Streamlit secrets.
 openai_api_key = st.secrets["OPENAI_API_KEY"]
 
-# Initialize the OpenAI client.
+# Initialize the OpenAI client
 client = OpenAI(
     api_key=openai_api_key,
     default_headers={"OpenAI-Beta": "assistants=v2"}
 )
 
 def apply_custom_css():
+    """
+    Custom CSS to create a futuristic dark theme
+    while ensuring text is clearly visible.
+    """
     st.markdown(
         """
         <style>
         /* Import a futuristic font from Google */
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
 
-        /* Set the overall background to a dark gradient */
+        /* Overall app background - gradient */
         .stApp {
-            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-            color: #e0e0e0;
+            background: linear-gradient(135deg, #1B1E34, #23233A 70%);
+            color: #EAEAEA;
             font-family: 'Orbitron', sans-serif;
         }
         
-        /* Style the main container */
+        /* Container for the main content */
         .main .block-container {
-            background: rgba(20, 20, 30, 0.85);
+            max-width: 900px;
+            background: rgba(36, 37, 62, 0.85);
             border-radius: 10px;
             padding: 2rem;
-            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.2);
+            margin: 2rem auto;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
         }
-        
-        /* Chat message bubbles for user */
+
+        /* Chat message - user */
         .stChatMessage-user {
-            background-color: #1a1a2e !important;
-            color: #e0e0e0 !important;
-            border-radius: 15px;
+            background-color: #2F2C49 !important;
+            color: #FFFFFF !important;
+            border-radius: 10px;
+            margin-bottom: 0.5rem;
             padding: 1rem;
-            font-size: 1.1rem;
-            box-shadow: 0 2px 10px rgba(0, 255, 255, 0.3);
+            font-size: 1.05rem;
+            box-shadow: 0 0 10px rgba(173, 216, 230, 0.2);
         }
         
-        /* Chat message bubbles for assistant */
+        /* Chat message - assistant */
         .stChatMessage-assistant {
-            background-color: #162447 !important;
-            color: #e0e0e0 !important;
-            border-radius: 15px;
+            background-color: #403B5C !important;
+            color: #F5F5F5 !important;
+            border-radius: 10px;
+            margin-bottom: 0.5rem;
             padding: 1rem;
-            font-size: 1.1rem;
-            box-shadow: 0 2px 10px rgba(255, 20, 147, 0.3);
+            font-size: 1.05rem;
+            box-shadow: 0 0 10px rgba(255, 160, 122, 0.2);
         }
-        
-        /* Style chat input container */
+
+        /* Chat input area */
         .stChatInput {
-            background-color: #0f0c29 !important;
-            border-top: 1px solid #302b63;
+            background-color: #1B1E34 !important;
+            border-top: 1px solid #2F2C49;
         }
         
-        /* Style the header */
-        .stHeader {
-            background: transparent;
+        /* Buttons and text input inside the container */
+        button, input, textarea {
+            font-family: 'Orbitron', sans-serif;
         }
-        
+
+        /* Title and headings color (accent) */
+        h1, h2, h3, h4, h5, h6 {
+            color: #FDB813; /* Example accent color */
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -171,11 +181,14 @@ def generate_answer(assistant_id, conversation_history, user_question):
     return answer
 
 def main():
-    apply_custom_css()  # Apply the futuristic custom styling
+    # Apply custom futuristic CSS
+    apply_custom_css()
 
-    st.image(LOGO_PATH, width=200)  # Display your company logo
-    st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
-    st.write("Welcome! Ask anything about your trip, itinerary planning, or our internal TravClan processes.")
+    # Optionally display the TravClan logo
+    st.image(LOGO_PATH, width=180)
+    
+    st.title("TravClan Navigator 🌍🧭")
+    st.write("Ask anything about your trip, itinerary planning, or internal TravClan processes!")
     
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
@@ -189,6 +202,7 @@ def main():
     else:
         assistant = st.session_state.assistant
     
+    # Display existing conversation
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
@@ -197,6 +211,7 @@ def main():
             with st.chat_message("assistant"):
                 st.write(msg["content"])
     
+    # Chat input
     user_question = st.chat_input("Type your travel question here...")
     
     if user_question:
@@ -204,8 +219,10 @@ def main():
             st.write(user_question)
         with st.spinner("Processing your query..."):
             answer = generate_answer(assistant.id, st.session_state.conversation_history, user_question)
+        
         st.session_state.conversation_history.append({"role": "user", "content": user_question})
         st.session_state.conversation_history.append({"role": "assistant", "content": answer})
+        
         with st.chat_message("assistant"):
             st.write(answer)
 
