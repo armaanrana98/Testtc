@@ -3,8 +3,8 @@ from openai import OpenAI
 import PyPDF2
 import time
 import requests
+import os
 
-# Set up page configuration.
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
     page_icon="🌍🧭",
@@ -13,6 +13,8 @@ st.set_page_config(
 )
 
 PDF_FILE_PATH = "data.pdf"
+# If using persistent storage, you could store vector store ID externally.
+# For demonstration, we'll assume the persistent vector store is retrieved via our function.
 
 # Retrieve API key from Streamlit secrets.
 openai_api_key = st.secrets["OPENAI_API_KEY"]
@@ -22,9 +24,6 @@ client = OpenAI(
     api_key=openai_api_key,
     default_headers={"OpenAI-Beta": "assistants=v2"}
 )
-
-# Use your provided persistent vector store ID.
-PERSISTENT_VECTOR_STORE_ID = "vs_67f2682336a8819187f46e4bf95851e8"
 
 def apply_custom_css():
     """
@@ -98,16 +97,17 @@ def pdf_file_to_text(pdf_file):
                 text += page_text + "\n"
     return text
 
-def get_persistent_vector_store():
+def upload_and_index_file(pdf_file_path):
+    """Uploads and indexes the PDF document into an OpenAI vector store.
+    See: https://platform.openai.com/docs/api-reference/vector-stores
     """
-    Retrieves the persistent vector store using the provided vector store ID.
-    """
-    try:
-        vector_store = client.vector_stores.retrieve(PERSISTENT_VECTOR_STORE_ID)
-        return vector_store
-    except Exception as e:
-        st.error(f"Error retrieving persistent vector store: {e}")
-        return None
+    with open(pdf_file_path, "rb") as file_stream:
+        vector_store = client.vector_stores.create(name="TravClan Navigator Documents")
+        client.vector_stores.file_batches.upload_and_poll(
+            vector_store_id=vector_store.id,
+            files=[file_stream]
+        )
+    return vector_store
 
 def duckduckgo_web_search(query):
     """Performs a search using the DuckDuckGo Instant Answer API and returns result snippets."""
@@ -129,12 +129,23 @@ def duckduckgo_web_search(query):
     return "\n".join(snippets)
 
 def create_assistant_with_vector_store(vector_store):
-    """Creates an assistant that uses the vector store for context."""
+    """
+    Creates an assistant that uses the persistent vector store for context.
+    Instructions:
+      - You are TravClan Navigator Assistant, a highly knowledgeable travel assistant.
+      - Use the provided internal travel documents to answer questions about itinerary planning,
+        booking processes, and internal TravClan protocols.
+      - If the internal documents do not contain sufficient information to fully answer the query,
+        reply with "answer not available in context".
+    """
     assistant = client.beta.assistants.create(
         name="TravClan Navigator Assistant",
         instructions=(
-            "Answer travel-related questions as precisely as possible using the provided context. "
-            "If the answer is not fully contained in the internal documents, say 'answer not available in context'."
+            "You are TravClan Navigator Assistant, a highly knowledgeable travel expert representing TravClan. "
+            "Use the provided internal travel documents to answer questions about itinerary planning, "
+            "booking processes, and internal TravClan protocols with accuracy and detail. "
+            "If the internal documents do not contain sufficient information to answer the query fully, "
+            "respond with 'answer not available in context'."
         ),
         model="gpt-4o",
         tools=[{"type": "file_search"}],
@@ -145,11 +156,14 @@ def create_assistant_with_vector_store(vector_store):
     return assistant
 
 def generate_clarifying_question(user_question):
-    """Generates a clarifying question using GPT-4o based on the user's travel query."""
+    """
+    Uses GPT-4o to generate a single, concise clarifying question that helps gather
+    the additional travel details needed for a complete answer.
+    """
     prompt = (
-        f"You are a travel expert. The user asked:\n\n"
+        f"You are a seasoned travel expert. The user asked:\n\n"
         f"\"{user_question}\"\n\n"
-        "What is one concise clarifying question you should ask to gather more specific travel details? "
+        "Provide one clear and concise clarifying question to obtain more specific details (e.g., duration, dates, number of nights) that will help you generate a complete and accurate itinerary or travel recommendation. "
         "Return only the question."
     )
     response = client.ChatCompletion.create(
@@ -159,12 +173,34 @@ def generate_clarifying_question(user_question):
     )
     return response["choices"][0]["message"]["content"].strip()
 
+def generate_generic_itinerary(user_question):
+    """
+    Uses GPT-4o to generate a best-effort itinerary or travel recommendation when the internal
+    documents do not provide sufficient details.
+    """
+    prompt = (
+        f"You are an expert travel planner with extensive experience in creating detailed itineraries. "
+        f"The user has asked: \"{user_question}\". "
+        "The internal documents do not contain enough specific details for this query. "
+        "Please generate a detailed and helpful travel itinerary or recommendation based on your general travel knowledge, "
+        "including key attractions, suggested durations, and travel tips. "
+        "Return the itinerary in a structured, easy-to-read format."
+    )
+    response = client.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=500
+    )
+    return response["choices"][0]["message"]["content"].strip()
+
 def generate_answer(assistant_id, conversation_history, user_question):
     """
     Generates an answer using conversation history and the current user question.
-    Uses internal context from the persistent vector store.
-    If the answer indicates insufficient data, a clarifying question is generated.
-    Additionally, if the query contains certain keywords, live DuckDuckGo data is combined.
+    Steps:
+      1. Retrieve an answer using internal document context.
+      2. If the answer contains "answer not available in context", then generate a generic itinerary.
+      3. Additionally, if the query includes travel-specific keywords (e.g., hotels, flights),
+         perform a live DuckDuckGo web search and append the results.
     """
     forced_search_keywords = ["hotel", "hotels", "flight", "flights", "restaurant", "restaurants"]
     
@@ -179,16 +215,19 @@ def generate_answer(assistant_id, conversation_history, user_question):
                 for delta_block in event.data.delta.content:
                     if delta_block.type == 'text':
                         doc_based_answer += delta_block.text.value
-    
+
+    # If internal documents don't have sufficient details, generate a generic itinerary.
     if "answer not available in context" in doc_based_answer.lower():
-        clarifying_question = generate_clarifying_question(user_question)
-        return clarifying_question
-    
+        generic_response = generate_generic_itinerary(user_question)
+        return generic_response
+
+    # If the query contains travel-specific keywords, perform a live web search and combine results.
     if any(keyword in user_question.lower() for keyword in forced_search_keywords):
         web_data = duckduckgo_web_search(user_question)
         if web_data.strip():
-            combined_answer = f"{doc_based_answer}\n\nAdditional info from DuckDuckGo:\n{web_data}"
+            combined_answer = f"{doc_based_answer}\n\nAdditional information from DuckDuckGo:\n{web_data}"
             return combined_answer
+
     return doc_based_answer
 
 def main():
@@ -200,13 +239,12 @@ def main():
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
     
-    # Retrieve persistent vector store.
+    # Retrieve persistent vector store (assumed to be persistent in production).
     if "vector_store" not in st.session_state:
         with st.spinner("Retrieving travel documents..."):
-            vector_store = get_persistent_vector_store()
-            if vector_store is None:
-                st.error("Failed to retrieve persistent vector store.")
-                return
+            # For production, you would retrieve a persistent vector store by its ID.
+            # Here we create a new one if not found.
+            vector_store = upload_and_index_file(PDF_FILE_PATH)
             st.session_state.vector_store = vector_store
             assistant = create_assistant_with_vector_store(vector_store)
             st.session_state.assistant = assistant
