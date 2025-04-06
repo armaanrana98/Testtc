@@ -13,11 +13,12 @@ st.set_page_config(
 )
 
 PDF_FILE_PATH = "data.pdf"
+# No logo in this version; logo will be handled later with Framer.
 
 # Retrieve API key from Streamlit secrets.
 openai_api_key = st.secrets["OPENAI_API_KEY"]
 
-# Initialize the OpenAI client with beta headers for assistants and vector stores.
+# Initialize the OpenAI client with beta headers.
 client = OpenAI(
     api_key=openai_api_key,
     default_headers={"OpenAI-Beta": "assistants=v2"}
@@ -25,7 +26,8 @@ client = OpenAI(
 
 def apply_custom_css():
     """
-    Apply custom CSS for a futuristic dark theme with neon accents.
+    Apply custom CSS for a futuristic, high-contrast dark theme
+    that ensures text is clearly visible.
     """
     st.markdown(
         """
@@ -33,52 +35,52 @@ def apply_custom_css():
         /* Import futuristic font */
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
 
-        /* Overall app background */
+        /* Overall app styling */
         .stApp {
-            background: linear-gradient(135deg, #1B1E34, #23233A 70%);
-            color: #EAEAEA;
+            background-color: #121212;
+            color: #FFFFFF;
             font-family: 'Orbitron', sans-serif;
         }
         
-        /* Main container styling */
+        /* Main container with a subtle dark background */
         .main .block-container {
             max-width: 900px;
-            background: rgba(36, 37, 62, 0.85);
-            border-radius: 10px;
+            background-color: #1e1e1e;
+            border-radius: 12px;
             padding: 2rem;
             margin: 2rem auto;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
-        }
-
-        /* Chat bubble for user messages */
-        .stChatMessage-user {
-            background-color: #2F2C49 !important;
-            color: #FFFFFF !important;
-            border-radius: 10px;
-            margin-bottom: 0.5rem;
-            padding: 1rem;
-            font-size: 1.05rem;
-            box-shadow: 0 0 10px rgba(173, 216, 230, 0.2);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
         }
         
-        /* Chat bubble for assistant messages */
-        .stChatMessage-assistant {
-            background-color: #403B5C !important;
-            color: #F5F5F5 !important;
+        /* User chat bubble styling */
+        .stChatMessage-user {
+            background-color: #2A2A2A !important;
+            color: #FFFFFF !important;
             border-radius: 10px;
-            margin-bottom: 0.5rem;
             padding: 1rem;
-            font-size: 1.05rem;
-            box-shadow: 0 0 10px rgba(255, 160, 122, 0.2);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Assistant chat bubble styling */
+        .stChatMessage-assistant {
+            background-color: #3A3A3A !important;
+            color: #FFFFFF !important;
+            border-radius: 10px;
+            padding: 1rem;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 0 10px rgba(0, 150, 136, 0.2);
         }
         
         /* Chat input area styling */
         .stChatInput {
-            background-color: #1B1E34 !important;
-            border-top: 1px solid #2F2C49;
+            background-color: #121212 !important;
+            border-top: 1px solid #2A2A2A;
         }
         
-        /* Heading styling with accent */
+        /* Heading accent color */
         h1, h2, h3, h4, h5, h6 {
             color: #FDB813;
         }
@@ -99,7 +101,7 @@ def pdf_file_to_text(pdf_file):
     return text
 
 def upload_and_index_file(pdf_file_path):
-    """Uploads and indexes the PDF into an OpenAI vector store."""
+    """Uploads and indexes the PDF document into an OpenAI vector store."""
     with open(pdf_file_path, "rb") as file_stream:
         vector_store = client.vector_stores.create(name="TravClan Navigator Documents")
         client.vector_stores.file_batches.upload_and_poll(
@@ -128,7 +130,7 @@ def duckduckgo_web_search(query):
     return "\n".join(snippets)
 
 def create_assistant_with_vector_store(vector_store):
-    """Creates an assistant using the vector store for context."""
+    """Creates an assistant that uses the vector store for context."""
     assistant = client.beta.assistants.create(
         name="TravClan Navigator Assistant",
         instructions=(
@@ -148,7 +150,7 @@ def generate_clarifying_question(user_question):
     prompt = (
         f"You are a travel expert. The user asked:\n\n"
         f"\"{user_question}\"\n\n"
-        "What is one concise clarifying question you should ask to gather more travel details? "
+        "What is one concise clarifying question you should ask to gather more specific travel details? "
         "Return only the question."
     )
     response = client.ChatCompletion.create(
@@ -159,8 +161,9 @@ def generate_clarifying_question(user_question):
     return response["choices"][0]["message"]["content"].strip()
 
 def generate_answer(assistant_id, conversation_history, user_question):
-    """Generates an answer using conversation history and the current user question.
-       If the response indicates insufficient internal data, a clarifying question is generated.
+    """
+    Generates an answer using conversation history and the current user question.
+    If the response indicates insufficient internal data, a clarifying question is generated.
     """
     messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
@@ -184,8 +187,8 @@ def generate_answer(assistant_id, conversation_history, user_question):
     return answer
 
 def main():
-    apply_custom_css()  # Apply the futuristic custom CSS
-    
+    apply_custom_css()  # Apply the custom futuristic styling
+
     st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
     st.write("Welcome! Ask about your trip, itinerary planning, or internal TravClan processes.")
     
@@ -201,7 +204,7 @@ def main():
     else:
         assistant = st.session_state.assistant
     
-    # Display the conversation using Streamlit's chat UI.
+    # Display existing conversation using chat UI.
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
