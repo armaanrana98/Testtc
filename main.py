@@ -4,7 +4,7 @@ import PyPDF2
 import time
 import requests
 
-# Set up page configuration.
+# Page config
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
     page_icon="🌍🧭",
@@ -13,12 +13,11 @@ st.set_page_config(
 )
 
 PDF_FILE_PATH = "data.pdf"
-# No logo in this version; logo will be handled later with Framer.
 
-# Retrieve API key from Streamlit secrets.
+# Retrieve API key from Streamlit secrets
 openai_api_key = st.secrets["OPENAI_API_KEY"]
 
-# Initialize the OpenAI client with beta headers.
+# Initialize the OpenAI client with beta headers
 client = OpenAI(
     api_key=openai_api_key,
     default_headers={"OpenAI-Beta": "assistants=v2"}
@@ -26,8 +25,8 @@ client = OpenAI(
 
 def apply_custom_css():
     """
-    Apply custom CSS for a futuristic, high-contrast dark theme
-    that ensures text is clearly visible.
+    Apply custom CSS for a futuristic, dark theme with improved text contrast
+    and a sleeker chat input design.
     """
     st.markdown(
         """
@@ -35,51 +34,72 @@ def apply_custom_css():
         /* Import futuristic font */
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
 
-        /* Overall app styling */
+        /* Overall app background */
         .stApp {
-            background-color: #121212;
+            background-color: #111111;
             color: #FFFFFF;
             font-family: 'Orbitron', sans-serif;
         }
         
-        /* Main container with a subtle dark background */
+        /* Main container with subtle dark background */
         .main .block-container {
             max-width: 900px;
-            background-color: #1e1e1e;
+            background-color: #1A1A1A;
             border-radius: 12px;
             padding: 2rem;
             margin: 2rem auto;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
         }
-        
-        /* User chat bubble styling */
+
+        /* User chat bubble styling - lighter background for better text contrast */
         .stChatMessage-user {
+            background-color: #2F2C49 !important;
+            color: #FFFFFF !important;
+            border-radius: 10px;
+            padding: 1rem;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Assistant chat bubble styling - lighter background for better text contrast */
+        .stChatMessage-assistant {
+            background-color: #3A3762 !important; 
+            color: #FFFFFF !important;
+            border-radius: 10px;
+            padding: 1rem;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+        }
+
+        /* Chat input container styling */
+        .stChatInput {
+            background-color: #1A1A1A !important;
+            border-top: 1px solid #333333;
+            padding: 1rem !important;
+        }
+
+        /* Chat input box styling - making it more polished */
+        .stChatInput textarea {
             background-color: #2A2A2A !important;
             color: #FFFFFF !important;
-            border-radius: 10px;
-            padding: 1rem;
-            font-size: 1.1rem;
-            margin-bottom: 0.5rem;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+            border: 1px solid #555555 !important;
+            border-radius: 8px !important;
+            font-family: 'Orbitron', sans-serif;
+            padding: 0.6rem !important;
         }
         
-        /* Assistant chat bubble styling */
-        .stChatMessage-assistant {
-            background-color: #3A3A3A !important;
-            color: #FFFFFF !important;
-            border-radius: 10px;
-            padding: 1rem;
-            font-size: 1.1rem;
-            margin-bottom: 0.5rem;
-            box-shadow: 0 0 10px rgba(0, 150, 136, 0.2);
+        /* Adjust the send button style if present */
+        .stChatInput button {
+            background-color: #FDB813 !important; 
+            color: #111111 !important;
+            border-radius: 8px !important;
+            font-family: 'Orbitron', sans-serif;
+            border: none;
+            margin-left: 0.5rem;
         }
-        
-        /* Chat input area styling */
-        .stChatInput {
-            background-color: #121212 !important;
-            border-top: 1px solid #2A2A2A;
-        }
-        
+
         /* Heading accent color */
         h1, h2, h3, h4, h5, h6 {
             color: #FDB813;
@@ -90,7 +110,6 @@ def apply_custom_css():
     )
 
 def pdf_file_to_text(pdf_file):
-    """Extract text from a PDF using PyPDF2."""
     text = ""
     with open(pdf_file, 'rb') as file:
         reader = PyPDF2.PdfReader(file)
@@ -101,7 +120,6 @@ def pdf_file_to_text(pdf_file):
     return text
 
 def upload_and_index_file(pdf_file_path):
-    """Uploads and indexes the PDF document into an OpenAI vector store."""
     with open(pdf_file_path, "rb") as file_stream:
         vector_store = client.vector_stores.create(name="TravClan Navigator Documents")
         client.vector_stores.file_batches.upload_and_poll(
@@ -111,7 +129,6 @@ def upload_and_index_file(pdf_file_path):
     return vector_store
 
 def duckduckgo_web_search(query):
-    """Performs a search using the DuckDuckGo Instant Answer API and returns result snippets."""
     params = {
         "q": query,
         "format": "json",
@@ -130,7 +147,6 @@ def duckduckgo_web_search(query):
     return "\n".join(snippets)
 
 def create_assistant_with_vector_store(vector_store):
-    """Creates an assistant that uses the vector store for context."""
     assistant = client.beta.assistants.create(
         name="TravClan Navigator Assistant",
         instructions=(
@@ -146,7 +162,6 @@ def create_assistant_with_vector_store(vector_store):
     return assistant
 
 def generate_clarifying_question(user_question):
-    """Generates a clarifying question using GPT-4o based on the user's travel query."""
     prompt = (
         f"You are a travel expert. The user asked:\n\n"
         f"\"{user_question}\"\n\n"
@@ -161,10 +176,6 @@ def generate_clarifying_question(user_question):
     return response["choices"][0]["message"]["content"].strip()
 
 def generate_answer(assistant_id, conversation_history, user_question):
-    """
-    Generates an answer using conversation history and the current user question.
-    If the response indicates insufficient internal data, a clarifying question is generated.
-    """
     messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
     
@@ -187,10 +198,10 @@ def generate_answer(assistant_id, conversation_history, user_question):
     return answer
 
 def main():
-    apply_custom_css()  # Apply the custom futuristic styling
+    apply_custom_css()  # Apply custom futuristic styling
 
-    st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
-    st.write("Welcome! Ask about your trip, itinerary planning, or internal TravClan processes.")
+    st.title("TravClan Navigator 🌍🧭")
+    st.write("Ask about your trip, itinerary planning, or internal TravClan processes.")
     
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
@@ -204,7 +215,7 @@ def main():
     else:
         assistant = st.session_state.assistant
     
-    # Display existing conversation using chat UI.
+    # Display existing conversation
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
@@ -220,8 +231,10 @@ def main():
             st.write(user_question)
         with st.spinner("Processing your query..."):
             answer = generate_answer(assistant.id, st.session_state.conversation_history, user_question)
+        
         st.session_state.conversation_history.append({"role": "user", "content": user_question})
         st.session_state.conversation_history.append({"role": "assistant", "content": answer})
+        
         with st.chat_message("assistant"):
             st.write(answer)
 
