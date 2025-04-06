@@ -25,73 +25,75 @@ client = OpenAI(
 
 def apply_custom_css():
     """
-    Apply custom CSS for a futuristic, dark, and high-contrast theme.
+    Apply custom CSS for a balanced, modern theme with a light background
+    and soft accent colors that ensure high readability.
     """
     st.markdown(
         """
         <style>
-        /* Import futuristic font */
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        /* Import a modern sans-serif font */
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
-        /* Overall app styling */
+        /* Overall app background with a subtle gradient */
         .stApp {
-            background-color: #111111;
-            color: #FFFFFF;
-            font-family: 'Orbitron', sans-serif;
+            background: linear-gradient(180deg, #f9f9f9, #eaeaea);
+            color: #333333;
+            font-family: 'Roboto', sans-serif;
         }
         
         /* Main container styling */
         .main .block-container {
             max-width: 900px;
-            background-color: #1e1e1e;
+            background-color: #ffffff;
             border-radius: 12px;
             padding: 2rem;
             margin: 2rem auto;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
         }
         
         /* Chat bubble for user messages */
         .stChatMessage-user {
-            background-color: #2F2C49 !important;
-            color: #FFFFFF !important;
+            background-color: #d0e6ff !important;
+            color: #0d1b2a !important;
             border-radius: 10px;
             padding: 1rem;
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
         }
         
         /* Chat bubble for assistant messages */
         .stChatMessage-assistant {
-            background-color: #3A3762 !important;
-            color: #FFFFFF !important;
+            background-color: #dfffd8 !important;
+            color: #0d1b2a !important;
             border-radius: 10px;
             padding: 1rem;
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
-            box-shadow: 0 0 10px rgba(0, 150, 136, 0.2);
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
         }
         
         /* Chat input area styling */
         .stChatInput {
-            background-color: #111111 !important;
-            border-top: 1px solid #333333;
+            background-color: #ffffff !important;
+            border-top: 1px solid #cccccc;
             padding: 1rem;
         }
         
         /* Chat input text box styling */
         .stChatInput textarea {
-            background-color: #2A2A2A !important;
-            color: #FFFFFF !important;
-            border: 1px solid #555555 !important;
+            background-color: #f4f4f4 !important;
+            color: #333333 !important;
+            border: 1px solid #cccccc !important;
             border-radius: 8px !important;
-            font-family: 'Orbitron', sans-serif;
+            font-family: 'Roboto', sans-serif;
             padding: 0.6rem !important;
+            font-size: 1rem;
         }
         
         /* Heading accent color */
         h1, h2, h3, h4, h5, h6 {
-            color: #FDB813;
+            color: #0066cc;
         }
         </style>
         """,
@@ -197,8 +199,8 @@ def generate_answer(assistant_id, conversation_history, user_question):
     return answer
 
 def main():
-    apply_custom_css()  # Apply the futuristic dark theme
-    
+    apply_custom_css()  # Apply custom futuristic, high-contrast styling
+
     st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
     st.write("Welcome! Ask about your trip, itinerary planning, or internal TravClan processes.")
     
@@ -214,7 +216,7 @@ def main():
     else:
         assistant = st.session_state.assistant
     
-    # Display the conversation using Streamlit's chat UI.
+    # Display conversation using Streamlit's chat UI.
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
