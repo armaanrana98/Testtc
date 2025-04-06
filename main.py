@@ -6,17 +6,16 @@ import requests
 import os
 
 st.set_page_config(
-    page_title="TravGPT",
-    page_icon="🤖",
+    page_title="TravClan Navigator 🌍🧭",
+    page_icon="🌍🧭",
     layout="centered",
     initial_sidebar_state="auto"
 )
 
 PDF_FILE_PATH = "data.pdf"
 
-# Retrieve API keys from Streamlit secrets
+# Retrieve API key from Streamlit secrets
 openai_api_key = st.secrets["OPENAI_API_KEY"]
-# For DuckDuckGo, no API key is required, but you can add one if needed.
 
 # Initialize the OpenAI client with beta headers for assistants and vector stores.
 client = OpenAI(
@@ -41,7 +40,7 @@ def upload_and_index_file(pdf_file_path):
     """
     with open(pdf_file_path, "rb") as file_stream:
         # Create a vector store for your travel documents.
-        vector_store = client.vector_stores.create(name="TravGPT Documents")
+        vector_store = client.vector_stores.create(name="TravClan Navigator Documents")
         # Upload and index the file.
         client.vector_stores.file_batches.upload_and_poll(
             vector_store_id=vector_store.id,
@@ -71,26 +70,26 @@ def duckduckgo_web_search(query):
     return "\n".join(snippets)
 
 def create_assistant_with_vector_store(vector_store):
-    """Creates an assistant that uses the vector store for context and also has access to a web search tool."""
+    """Creates an assistant that uses the vector store for context.
+       (Note: We removed the 'web_search' tool since only 'file_search' is supported.)
+    """
     assistant = client.beta.assistants.create(
-        name="TravGPT Assistant",
+        name="TravClan Navigator Assistant",
         instructions=(
             "Answer travel-related questions as precisely as possible using the provided context. "
-            "If the answer is not fully contained in the internal documents, say 'answer not available in context' "
-            "and then use the web_search tool to fetch live data."
+            "If the answer is not fully contained in the internal documents, say 'answer not available in context'."
         ),
         model="gpt-4o",
-        tools=[{"type": "file_search"}, {"type": "web_search"}],
+        tools=[{"type": "file_search"}],
         tool_resources={
-            "file_search": {"vector_store_ids": [vector_store.id]},
-            "web_search": {"api": "duckduckgo"}  # Indicates use of our DuckDuckGo search function.
+            "file_search": {"vector_store_ids": [vector_store.id]}
         }
     )
     return assistant
 
 def generate_answer(assistant_id, conversation_history, user_question):
     """Generates an answer using conversation history and the current user question.
-       If the response indicates insufficient internal data, it performs a DuckDuckGo search.
+       If the response indicates insufficient internal data, perform a DuckDuckGo web search.
     """
     messages = [{"role": "system", "content": "You are a helpful travel assistant."}]
     messages.extend(conversation_history)
@@ -109,7 +108,7 @@ def generate_answer(assistant_id, conversation_history, user_question):
                         answer += delta_block.text.value
     end_time = time.time()
     
-    # If the answer is not available from internal context, perform a live web search.
+    # If internal context is insufficient, do a live DuckDuckGo web search.
     if "answer not available in context" in answer.lower():
         web_data = duckduckgo_web_search(user_question)
         answer += "\n\nAdditional live information from DuckDuckGo:\n" + web_data
@@ -117,13 +116,13 @@ def generate_answer(assistant_id, conversation_history, user_question):
     return answer
 
 def main():
-    st.header("TravGPT🤖 - Your Travel Assistant")
+    st.header("TravClan Navigator 🌍🧭 - Your Travel Assistant")
     
     # Maintain conversation history in session state.
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
     
-    # Upload and index the PDF only once; reuse the vector store.
+    # Index the PDF and create the vector store and assistant only once.
     if "vector_store" not in st.session_state:
         with st.spinner("Indexing travel documents..."):
             vector_store = upload_and_index_file(PDF_FILE_PATH)
@@ -134,7 +133,6 @@ def main():
         vector_store = st.session_state.vector_store
         assistant = st.session_state.assistant
     
-    # Streamlit Chat UI using text_input.
     user_question = st.text_input("Enter your travel question:")
     
     if st.button("Ask"):
