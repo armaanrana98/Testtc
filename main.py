@@ -4,6 +4,14 @@ import PyPDF2
 import time
 import requests
 
+# Example color variables — adjust to match your brand
+PRIMARY_BG = "#F7F9FC"      # Light background color
+SECONDARY_BG = "#FFFFFF"    # Another background or card color
+TEXT_COLOR = "#333333"      # Standard text color
+ACCENT_COLOR = "#FFA500"    # Example accent color (e.g., for highlights, buttons)
+CHAT_USER_BG = "#E9F2FF"    # Light user bubble background
+CHAT_ASSISTANT_BG = "#F2F2F2"  # Assistant bubble background
+
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
     page_icon="🌍🧭",
@@ -11,19 +19,49 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-PDF_FILE_PATH = "data.pdf"
+# Inject custom CSS
+def apply_custom_css():
+    st.markdown(f"""
+    <style>
+        /* Overall app background */
+        .stApp {{
+            background-color: {PRIMARY_BG};
+            color: {TEXT_COLOR};
+        }}
+        /* Center the main container and give it a max-width if you prefer */
+        .main .block-container {{
+            max-width: 1200px;
+            background-color: {SECONDARY_BG};
+            padding: 2rem 3rem;
+            border-radius: 6px;
+        }}
+        /* Chat message bubbles */
+        .stChatMessage-user {{
+            background-color: {CHAT_USER_BG} !important;
+            color: {TEXT_COLOR} !important;
+        }}
+        .stChatMessage-assistant {{
+            background-color: {CHAT_ASSISTANT_BG} !important;
+            color: {TEXT_COLOR} !important;
+        }}
+        /* Example accent color for headings or links */
+        h1, h2, h3, h4, h5, h6 {{
+            color: {ACCENT_COLOR};
+        }}
+        /* Optional: style the chat input container */
+        .stChatInput {{
+            background-color: {SECONDARY_BG};
+            border-top: 1px solid #ccc;
+        }}
+    </style>
+    """, unsafe_allow_html=True)
 
-# Retrieve API key from Streamlit secrets.
-openai_api_key = st.secrets["OPENAI_API_KEY"]
-
-# Initialize the OpenAI client with beta headers for assistants and vector stores.
-client = OpenAI(
-    api_key=openai_api_key,
-    default_headers={"OpenAI-Beta": "assistants=v2"}
-)
+# The rest of your code remains largely the same.
+from openai import OpenAI
+client = None  # We'll init after secrets are loaded
 
 def pdf_file_to_text(pdf_file):
-    """Extract text from a PDF using PyPDF2."""
+    """Extract text from PDF."""
     text = ""
     with open(pdf_file, 'rb') as file:
         reader = PyPDF2.PdfReader(file)
@@ -34,39 +72,14 @@ def pdf_file_to_text(pdf_file):
     return text
 
 def upload_and_index_file(pdf_file_path):
-    """Uploads and indexes the PDF document into an OpenAI vector store.
-    See: https://platform.openai.com/docs/api-reference/vector-stores
-    """
+    """Uploads and indexes the PDF document into an OpenAI vector store."""
     with open(pdf_file_path, "rb") as file_stream:
-        # Create a vector store for your travel documents.
         vector_store = client.vector_stores.create(name="TravClan Navigator Documents")
-        # Upload and index the file.
         client.vector_stores.file_batches.upload_and_poll(
             vector_store_id=vector_store.id,
             files=[file_stream]
         )
     return vector_store
-
-def duckduckgo_web_search(query):
-    """Performs a search using the DuckDuckGo Instant Answer API.
-       Returns top result snippets as a combined string.
-    """
-    params = {
-        "q": query,
-        "format": "json",
-        "no_html": 1,
-        "skip_disambig": 1
-    }
-    response = requests.get("https://api.duckduckgo.com/", params=params)
-    data = response.json()
-    snippets = []
-    if data.get("AbstractText"):
-        snippets.append(data["AbstractText"])
-    if data.get("RelatedTopics"):
-        for topic in data["RelatedTopics"]:
-            if isinstance(topic, dict) and topic.get("Text"):
-                snippets.append(topic["Text"])
-    return "\n".join(snippets)
 
 def create_assistant_with_vector_store(vector_store):
     """Creates an assistant that uses the vector store for context."""
@@ -85,34 +98,23 @@ def create_assistant_with_vector_store(vector_store):
     return assistant
 
 def generate_clarifying_question(user_question):
-    """
-    Generates a clarifying question using GPT-4o based on the user's travel query.
-    For example, if a user asks about a Dubai trip, it might ask: "How many nights are you planning to stay?"
-    """
     prompt = (
-        f"You are a travel expert assisting users in planning trips. Given the user's query:\n\n"
+        f"You are a travel expert. The user asked:\n\n"
         f"\"{user_question}\"\n\n"
-        "What is one concise clarifying question you should ask to get more specific travel details? "
+        "What is a single, concise clarifying question you should ask to gather more travel details? "
         "Return only the question."
     )
     response = client.ChatCompletion.create(
-        model="gpt-4o",  # Using GPT-4o for all tasks.
+        model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=50
     )
-    clarifying_question = response["choices"][0]["message"]["content"].strip()
-    return clarifying_question
+    return response["choices"][0]["message"]["content"].strip()
 
 def generate_answer(assistant_id, conversation_history, user_question):
-    """
-    Generates an answer using conversation history and the current user question.
-    If the response indicates insufficient internal data (i.e. contains "answer not available in context"),
-    dynamically generates a clarifying question using GPT-4o.
-    """
     messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
     
-    # Create a conversation thread.
     thread = client.beta.threads.create(messages=messages)
     answer = ""
     start_time = time.time()
@@ -125,7 +127,6 @@ def generate_answer(assistant_id, conversation_history, user_question):
                         answer += delta_block.text.value
     end_time = time.time()
     
-    # If the internal documents lack required details, dynamically ask for clarification.
     if "answer not available in context" in answer.lower():
         clarifying_question = generate_clarifying_question(user_question)
         answer = clarifying_question
@@ -133,13 +134,24 @@ def generate_answer(assistant_id, conversation_history, user_question):
     return answer
 
 def main():
-    st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
+    global client
+    # Retrieve API key from Streamlit secrets
+    openai_api_key = st.secrets["OPENAI_API_KEY"]
+    # Initialize the OpenAI client with beta headers for assistants and vector stores.
+    client = OpenAI(
+        api_key=openai_api_key,
+        default_headers={"OpenAI-Beta": "assistants=v2"}
+    )
+
+    # Apply custom CSS for theming
+    apply_custom_css()
+
+    st.title("TravClan Navigator 🌍🧭")
+    st.write("Welcome! Ask anything about your trip or our internal processes. We'll consult internal docs and ask clarifying questions as needed.")
     
-    # Use session state to store conversation history.
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
     
-    # Upload and index the PDF and create the assistant only once.
     if "vector_store" not in st.session_state:
         with st.spinner("Indexing travel documents..."):
             vector_store = upload_and_index_file(PDF_FILE_PATH)
@@ -149,7 +161,7 @@ def main():
     else:
         assistant = st.session_state.assistant
     
-    # Display existing conversation using Streamlit's chat UI.
+    # Display existing conversation with chat UI
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
@@ -158,7 +170,6 @@ def main():
             with st.chat_message("assistant"):
                 st.write(msg["content"])
     
-    # Use st.chat_input for user input.
     user_question = st.chat_input("Type your travel question here...")
     
     if user_question:
@@ -166,9 +177,10 @@ def main():
             st.write(user_question)
         with st.spinner("Processing your query..."):
             answer = generate_answer(assistant.id, st.session_state.conversation_history, user_question)
-        # Update conversation history.
+        
         st.session_state.conversation_history.append({"role": "user", "content": user_question})
         st.session_state.conversation_history.append({"role": "assistant", "content": answer})
+        
         with st.chat_message("assistant"):
             st.write(answer)
 
