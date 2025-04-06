@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 PDF_FILE_PATH = "data.pdf"
-PERSISTENT_VECTOR_STORE_ID = "vs_67f2682336a8819187f46e4bf95851e8"  # Provided persistent ID
+PERSISTENT_VECTOR_STORE_ID = "vs_67f2be79b01c819198749cdd69887e11" 
 
 # Retrieve API key from Streamlit secrets.
 openai_api_key = st.secrets["OPENAI_API_KEY"]
