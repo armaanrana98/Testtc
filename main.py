@@ -4,14 +4,7 @@ import PyPDF2
 import time
 import requests
 
-# Example color variables — adjust to match your brand
-PRIMARY_BG = "#F7F9FC"      # Light background color
-SECONDARY_BG = "#FFFFFF"    # Another background or card color
-TEXT_COLOR = "#333333"      # Standard text color
-ACCENT_COLOR = "#FFA500"    # Example accent color (e.g., for highlights, buttons)
-CHAT_USER_BG = "#E9F2FF"    # Light user bubble background
-CHAT_ASSISTANT_BG = "#F2F2F2"  # Assistant bubble background
-
+# Set up page configuration.
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
     page_icon="🌍🧭",
@@ -19,49 +12,77 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# Inject custom CSS
-def apply_custom_css():
-    st.markdown(f"""
-    <style>
-        /* Overall app background */
-        .stApp {{
-            background-color: {PRIMARY_BG};
-            color: {TEXT_COLOR};
-        }}
-        /* Center the main container and give it a max-width if you prefer */
-        .main .block-container {{
-            max-width: 1200px;
-            background-color: {SECONDARY_BG};
-            padding: 2rem 3rem;
-            border-radius: 6px;
-        }}
-        /* Chat message bubbles */
-        .stChatMessage-user {{
-            background-color: {CHAT_USER_BG} !important;
-            color: {TEXT_COLOR} !important;
-        }}
-        .stChatMessage-assistant {{
-            background-color: {CHAT_ASSISTANT_BG} !important;
-            color: {TEXT_COLOR} !important;
-        }}
-        /* Example accent color for headings or links */
-        h1, h2, h3, h4, h5, h6 {{
-            color: {ACCENT_COLOR};
-        }}
-        /* Optional: style the chat input container */
-        .stChatInput {{
-            background-color: {SECONDARY_BG};
-            border-top: 1px solid #ccc;
-        }}
-    </style>
-    """, unsafe_allow_html=True)
+PDF_FILE_PATH = "data.pdf"
+LOGO_PATH = "travclan_logo.PNG"  
 
-# The rest of your code remains largely the same.
-from openai import OpenAI
-client = None  # We'll init after secrets are loaded
+# Retrieve API key from Streamlit secrets.
+openai_api_key = st.secrets["OPENAI_API_KEY"]
+
+# Initialize the OpenAI client.
+client = OpenAI(
+    api_key=openai_api_key,
+    default_headers={"OpenAI-Beta": "assistants=v2"}
+)
+
+def apply_custom_css():
+    st.markdown(
+        """
+        <style>
+        /* Import a futuristic font from Google */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        /* Set the overall background to a dark gradient */
+        .stApp {
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: #e0e0e0;
+            font-family: 'Orbitron', sans-serif;
+        }
+        
+        /* Style the main container */
+        .main .block-container {
+            background: rgba(20, 20, 30, 0.85);
+            border-radius: 10px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.2);
+        }
+        
+        /* Chat message bubbles for user */
+        .stChatMessage-user {
+            background-color: #1a1a2e !important;
+            color: #e0e0e0 !important;
+            border-radius: 15px;
+            padding: 1rem;
+            font-size: 1.1rem;
+            box-shadow: 0 2px 10px rgba(0, 255, 255, 0.3);
+        }
+        
+        /* Chat message bubbles for assistant */
+        .stChatMessage-assistant {
+            background-color: #162447 !important;
+            color: #e0e0e0 !important;
+            border-radius: 15px;
+            padding: 1rem;
+            font-size: 1.1rem;
+            box-shadow: 0 2px 10px rgba(255, 20, 147, 0.3);
+        }
+        
+        /* Style chat input container */
+        .stChatInput {
+            background-color: #0f0c29 !important;
+            border-top: 1px solid #302b63;
+        }
+        
+        /* Style the header */
+        .stHeader {
+            background: transparent;
+        }
+        
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
 def pdf_file_to_text(pdf_file):
-    """Extract text from PDF."""
     text = ""
     with open(pdf_file, 'rb') as file:
         reader = PyPDF2.PdfReader(file)
@@ -72,7 +93,6 @@ def pdf_file_to_text(pdf_file):
     return text
 
 def upload_and_index_file(pdf_file_path):
-    """Uploads and indexes the PDF document into an OpenAI vector store."""
     with open(pdf_file_path, "rb") as file_stream:
         vector_store = client.vector_stores.create(name="TravClan Navigator Documents")
         client.vector_stores.file_batches.upload_and_poll(
@@ -81,8 +101,25 @@ def upload_and_index_file(pdf_file_path):
         )
     return vector_store
 
+def duckduckgo_web_search(query):
+    params = {
+        "q": query,
+        "format": "json",
+        "no_html": 1,
+        "skip_disambig": 1
+    }
+    response = requests.get("https://api.duckduckgo.com/", params=params)
+    data = response.json()
+    snippets = []
+    if data.get("AbstractText"):
+        snippets.append(data["AbstractText"])
+    if data.get("RelatedTopics"):
+        for topic in data["RelatedTopics"]:
+            if isinstance(topic, dict) and topic.get("Text"):
+                snippets.append(topic["Text"])
+    return "\n".join(snippets)
+
 def create_assistant_with_vector_store(vector_store):
-    """Creates an assistant that uses the vector store for context."""
     assistant = client.beta.assistants.create(
         name="TravClan Navigator Assistant",
         instructions=(
@@ -101,7 +138,7 @@ def generate_clarifying_question(user_question):
     prompt = (
         f"You are a travel expert. The user asked:\n\n"
         f"\"{user_question}\"\n\n"
-        "What is a single, concise clarifying question you should ask to gather more travel details? "
+        "What is one concise clarifying question you should ask to gather more travel details? "
         "Return only the question."
     )
     response = client.ChatCompletion.create(
@@ -134,20 +171,11 @@ def generate_answer(assistant_id, conversation_history, user_question):
     return answer
 
 def main():
-    global client
-    # Retrieve API key from Streamlit secrets
-    openai_api_key = st.secrets["OPENAI_API_KEY"]
-    # Initialize the OpenAI client with beta headers for assistants and vector stores.
-    client = OpenAI(
-        api_key=openai_api_key,
-        default_headers={"OpenAI-Beta": "assistants=v2"}
-    )
+    apply_custom_css()  # Apply the futuristic custom styling
 
-    # Apply custom CSS for theming
-    apply_custom_css()
-
-    st.title("TravClan Navigator 🌍🧭")
-    st.write("Welcome! Ask anything about your trip or our internal processes. We'll consult internal docs and ask clarifying questions as needed.")
+    st.image(LOGO_PATH, width=200)  # Display your company logo
+    st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
+    st.write("Welcome! Ask anything about your trip, itinerary planning, or our internal TravClan processes.")
     
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
@@ -161,7 +189,6 @@ def main():
     else:
         assistant = st.session_state.assistant
     
-    # Display existing conversation with chat UI
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
@@ -177,10 +204,8 @@ def main():
             st.write(user_question)
         with st.spinner("Processing your query..."):
             answer = generate_answer(assistant.id, st.session_state.conversation_history, user_question)
-        
         st.session_state.conversation_history.append({"role": "user", "content": user_question})
         st.session_state.conversation_history.append({"role": "assistant", "content": answer})
-        
         with st.chat_message("assistant"):
             st.write(answer)
 
