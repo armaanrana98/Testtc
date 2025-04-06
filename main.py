@@ -4,6 +4,7 @@ import PyPDF2
 import time
 import requests
 
+# Ensure you have Streamlit >= 1.74 for st.chat_xxx APIs
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
     page_icon="🌍🧭",
@@ -48,7 +49,7 @@ def upload_and_index_file(pdf_file_path):
     return vector_store
 
 def duckduckgo_web_search(query):
-    """Performs a search using the DuckDuckGo Instant Answer API.
+    """Performs a search using DuckDuckGo Instant Answer API.
        Returns top result snippets as a combined string.
     """
     params = {
@@ -69,9 +70,7 @@ def duckduckgo_web_search(query):
     return "\n".join(snippets)
 
 def create_assistant_with_vector_store(vector_store):
-    """Creates an assistant that uses the vector store for context.
-       (Only 'file_search' is supported.)
-    """
+    """Creates an assistant that uses the vector store for context."""
     assistant = client.beta.assistants.create(
         name="TravClan Navigator Assistant",
         instructions=(
@@ -87,14 +86,13 @@ def create_assistant_with_vector_store(vector_store):
     return assistant
 
 def generate_answer(assistant_id, conversation_history, user_question):
-    """Generates an answer using conversation history and the current question.
-       If the response indicates insufficient internal data, performs a DuckDuckGo web search.
+    """Generates an answer using conversation history and the current user question.
+       If the response indicates insufficient internal data, perform a DuckDuckGo web search.
     """
-    # Use conversation history and append the current query as a "user" message.
     messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
     
-    # Create a conversation thread.
+    # Create a thread for the conversation.
     thread = client.beta.threads.create(messages=messages)
     answer = ""
     start_time = time.time()
@@ -107,7 +105,7 @@ def generate_answer(assistant_id, conversation_history, user_question):
                         answer += delta_block.text.value
     end_time = time.time()
     
-    # If internal context is insufficient, trigger a live DuckDuckGo search.
+    # If internal context is insufficient, do a live DuckDuckGo web search.
     if "answer not available in context" in answer.lower():
         web_data = duckduckgo_web_search(user_question)
         answer += "\n\nAdditional live information from DuckDuckGo:\n" + web_data
@@ -115,13 +113,14 @@ def generate_answer(assistant_id, conversation_history, user_question):
     return answer
 
 def main():
-    st.header("TravClan Navigator 🌍🧭 - Your Travel Assistant")
-    
-    # Use session state to store conversation history.
+    st.title("TravClan Navigator 🌍🧭")
+    st.write("Welcome to your Travel Assistant with a Chat UI!")
+
+    # Maintain conversation history in session state.
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
-    
-    # Upload and index the PDF and create the assistant only once.
+
+    # Index the PDF and create the assistant only once.
     if "vector_store" not in st.session_state:
         with st.spinner("Indexing travel documents..."):
             vector_store = upload_and_index_file(PDF_FILE_PATH)
@@ -130,20 +129,32 @@ def main():
             st.session_state.assistant = assistant
     else:
         assistant = st.session_state.assistant
-    
-    # Streamlit Chat UI.
-    user_question = st.text_input("Enter your travel question:")
-    
-    if st.button("Ask"):
-        if user_question.strip():
-            with st.spinner("Processing your query..."):
-                answer = generate_answer(assistant.id, st.session_state.conversation_history, user_question)
-                # Append the current query and answer to conversation history.
-                st.session_state.conversation_history.append({"role": "user", "content": user_question})
-                st.session_state.conversation_history.append({"role": "assistant", "content": answer})
-                st.write(answer)
+
+    # Display existing chat messages in session
+    for msg in st.session_state.conversation_history:
+        if msg["role"] == "user":
+            with st.chat_message("user"):
+                st.write(msg["content"])
         else:
-            st.warning("Please enter a question.")
+            with st.chat_message("assistant"):
+                st.write(msg["content"])
+
+    # Use st.chat_input for user input (Streamlit 1.74+)
+    user_question = st.chat_input("Type your question here...")
+
+    if user_question:
+        with st.chat_message("user"):
+            st.write(user_question)
+        with st.spinner("Processing your query..."):
+            answer = generate_answer(assistant.id, st.session_state.conversation_history, user_question)
+        
+        # Update session state with new messages
+        st.session_state.conversation_history.append({"role": "user", "content": user_question})
+        st.session_state.conversation_history.append({"role": "assistant", "content": answer})
+
+        # Display the assistant's response
+        with st.chat_message("assistant"):
+            st.write(answer)
 
 if __name__ == "__main__":
     main()
