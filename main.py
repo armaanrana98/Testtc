@@ -13,8 +13,7 @@ st.set_page_config(
 )
 
 PDF_FILE_PATH = "data.pdf"
-# If using persistent storage, you could store vector store ID externally.
-# For demonstration, we'll assume the persistent vector store is retrieved via our function.
+PERSISTENT_VECTOR_STORE_ID = "vs_67f2682336a8819187f46e4bf95851e8"  # Provided persistent ID
 
 # Retrieve API key from Streamlit secrets.
 openai_api_key = st.secrets["OPENAI_API_KEY"]
@@ -27,17 +26,24 @@ client = OpenAI(
 
 def apply_custom_css():
     """
-    Apply custom CSS for a balanced, modern theme with high readability.
+    Apply custom CSS for a balanced, modern theme.
+    This version uses a light container background with pastel chat bubbles,
+    ensuring that text remains dark and easily readable.
     """
     st.markdown(
         """
         <style>
+        /* Import Roboto font for a modern look */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+        /* Overall app styling */
         .stApp {
             background: linear-gradient(180deg, #f9f9f9, #eaeaea);
             color: #333333;
             font-family: 'Roboto', sans-serif;
         }
+        
+        /* Main container styling */
         .main .block-container {
             max-width: 900px;
             background-color: #ffffff;
@@ -46,6 +52,8 @@ def apply_custom_css():
             margin: 2rem auto;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
         }
+        
+        /* Chat bubble for user messages: pastel blue background with dark text */
         .stChatMessage-user {
             background-color: #d0e6ff !important;
             color: #0d1b2a !important;
@@ -55,6 +63,8 @@ def apply_custom_css():
             margin-bottom: 0.5rem;
             box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
         }
+        
+        /* Chat bubble for assistant messages: pastel green background with dark text */
         .stChatMessage-assistant {
             background-color: #dfffd8 !important;
             color: #0d1b2a !important;
@@ -64,11 +74,15 @@ def apply_custom_css():
             margin-bottom: 0.5rem;
             box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
         }
+        
+        /* Chat input area styling */
         .stChatInput {
             background-color: #ffffff !important;
             border-top: 1px solid #cccccc;
             padding: 1rem;
         }
+        
+        /* Chat input text box styling: light gray background with dark text */
         .stChatInput textarea {
             background-color: #f4f4f4 !important;
             color: #333333 !important;
@@ -78,6 +92,8 @@ def apply_custom_css():
             padding: 0.6rem !important;
             font-size: 1rem;
         }
+        
+        /* Headings accent color */
         h1, h2, h3, h4, h5, h6 {
             color: #0066cc;
         }
@@ -98,9 +114,7 @@ def pdf_file_to_text(pdf_file):
     return text
 
 def upload_and_index_file(pdf_file_path):
-    """Uploads and indexes the PDF document into an OpenAI vector store.
-    See: https://platform.openai.com/docs/api-reference/vector-stores
-    """
+    """Uploads and indexes the PDF document into an OpenAI vector store."""
     with open(pdf_file_path, "rb") as file_stream:
         vector_store = client.vector_stores.create(name="TravClan Navigator Documents")
         client.vector_stores.file_batches.upload_and_poll(
@@ -108,6 +122,15 @@ def upload_and_index_file(pdf_file_path):
             files=[file_stream]
         )
     return vector_store
+
+def get_persistent_vector_store():
+    """Retrieves the persistent vector store using the provided vector store ID."""
+    try:
+        vector_store = client.vector_stores.retrieve(PERSISTENT_VECTOR_STORE_ID)
+        return vector_store
+    except Exception as e:
+        st.error(f"Error retrieving persistent vector store: {e}")
+        return None
 
 def duckduckgo_web_search(query):
     """Performs a search using the DuckDuckGo Instant Answer API and returns result snippets."""
@@ -131,21 +154,15 @@ def duckduckgo_web_search(query):
 def create_assistant_with_vector_store(vector_store):
     """
     Creates an assistant that uses the persistent vector store for context.
-    Instructions:
-      - You are TravClan Navigator Assistant, a highly knowledgeable travel assistant.
-      - Use the provided internal travel documents to answer questions about itinerary planning,
-        booking processes, and internal TravClan protocols.
-      - If the internal documents do not contain sufficient information to fully answer the query,
-        reply with "answer not available in context".
+    The assistant is given production-grade instructions.
     """
     assistant = client.beta.assistants.create(
         name="TravClan Navigator Assistant",
         instructions=(
             "You are TravClan Navigator Assistant, a highly knowledgeable travel expert representing TravClan. "
-            "Use the provided internal travel documents to answer questions about itinerary planning, "
-            "booking processes, and internal TravClan protocols with accuracy and detail. "
-            "If the internal documents do not contain sufficient information to answer the query fully, "
-            "respond with 'answer not available in context'."
+            "Use the provided internal travel documents to answer queries regarding itinerary planning, booking processes, "
+            "and internal TravClan protocols with precision and detail. "
+            "If the internal documents do not contain sufficient details, reply with 'answer not available in context'."
         ),
         model="gpt-4o",
         tools=[{"type": "file_search"}],
@@ -157,13 +174,13 @@ def create_assistant_with_vector_store(vector_store):
 
 def generate_clarifying_question(user_question):
     """
-    Uses GPT-4o to generate a single, concise clarifying question that helps gather
-    the additional travel details needed for a complete answer.
+    Uses GPT-4o to generate a single, concise clarifying question that gathers additional details
+    necessary to produce a complete travel recommendation.
     """
     prompt = (
         f"You are a seasoned travel expert. The user asked:\n\n"
         f"\"{user_question}\"\n\n"
-        "Provide one clear and concise clarifying question to obtain more specific details (e.g., duration, dates, number of nights) that will help you generate a complete and accurate itinerary or travel recommendation. "
+        "What is one clear and concise clarifying question you should ask to gather more specific travel details (e.g., dates, duration, number of nights) that will help you generate a complete itinerary or travel recommendation? "
         "Return only the question."
     )
     response = client.ChatCompletion.create(
@@ -175,16 +192,12 @@ def generate_clarifying_question(user_question):
 
 def generate_generic_itinerary(user_question):
     """
-    Uses GPT-4o to generate a best-effort itinerary or travel recommendation when the internal
-    documents do not provide sufficient details.
+    Uses GPT-4o to generate a best-effort itinerary when internal documents lack sufficient details.
     """
     prompt = (
-        f"You are an expert travel planner with extensive experience in creating detailed itineraries. "
-        f"The user has asked: \"{user_question}\". "
-        "The internal documents do not contain enough specific details for this query. "
-        "Please generate a detailed and helpful travel itinerary or recommendation based on your general travel knowledge, "
-        "including key attractions, suggested durations, and travel tips. "
-        "Return the itinerary in a structured, easy-to-read format."
+        f"You are an expert travel planner. The user asked: \"{user_question}\". "
+        "The internal documents do not have enough specific details for this query. "
+        "Please create a detailed, step-by-step travel itinerary that includes key attractions, recommended durations, and travel tips, presented in a clear format."
     )
     response = client.ChatCompletion.create(
         model="gpt-4o",
@@ -195,12 +208,12 @@ def generate_generic_itinerary(user_question):
 
 def generate_answer(assistant_id, conversation_history, user_question):
     """
-    Generates an answer using conversation history and the current user question.
-    Steps:
-      1. Retrieve an answer using internal document context.
-      2. If the answer contains "answer not available in context", then generate a generic itinerary.
-      3. Additionally, if the query includes travel-specific keywords (e.g., hotels, flights),
-         perform a live DuckDuckGo web search and append the results.
+    Generates an answer using conversation history and the user's current question.
+    1. Retrieves an answer based on internal document context.
+    2. If the internal content is insufficient (i.e. returns 'answer not available in context'),
+       then generate a generic itinerary using GPT-4o.
+    3. Additionally, if the user query contains specific travel keywords,
+       perform a live DuckDuckGo search and append those results.
     """
     forced_search_keywords = ["hotel", "hotels", "flight", "flights", "restaurant", "restaurants"]
     
@@ -216,12 +229,10 @@ def generate_answer(assistant_id, conversation_history, user_question):
                     if delta_block.type == 'text':
                         doc_based_answer += delta_block.text.value
 
-    # If internal documents don't have sufficient details, generate a generic itinerary.
     if "answer not available in context" in doc_based_answer.lower():
         generic_response = generate_generic_itinerary(user_question)
         return generic_response
 
-    # If the query contains travel-specific keywords, perform a live web search and combine results.
     if any(keyword in user_question.lower() for keyword in forced_search_keywords):
         web_data = duckduckgo_web_search(user_question)
         if web_data.strip():
@@ -235,23 +246,21 @@ def main():
 
     st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
     st.write("Welcome! Ask about your trip, itinerary planning, or internal TravClan processes.")
-    
+
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
     
-    # Retrieve persistent vector store (assumed to be persistent in production).
+    # Retrieve persistent vector store using provided ID.
     if "vector_store" not in st.session_state:
         with st.spinner("Retrieving travel documents..."):
-            # For production, you would retrieve a persistent vector store by its ID.
-            # Here we create a new one if not found.
-            vector_store = upload_and_index_file(PDF_FILE_PATH)
+            vector_store = client.vector_stores.retrieve(PERSISTENT_VECTOR_STORE_ID)
             st.session_state.vector_store = vector_store
             assistant = create_assistant_with_vector_store(vector_store)
             st.session_state.assistant = assistant
     else:
         assistant = st.session_state.assistant
-    
-    # Display conversation using Streamlit's chat UI.
+
+    # Display existing conversation using Streamlit's chat UI.
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
