@@ -3,8 +3,8 @@ from openai import OpenAI
 import PyPDF2
 import time
 import requests
+import os
 
-# Set up page configuration.
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
     page_icon="🌍🧭",
@@ -13,6 +13,7 @@ st.set_page_config(
 )
 
 PDF_FILE_PATH = "data.pdf"
+VECTOR_STORE_ID_FILE = "vector_store_id.txt"  # Local file for simulating persistence
 
 # Retrieve API key from Streamlit secrets.
 openai_api_key = st.secrets["OPENAI_API_KEY"]
@@ -25,23 +26,17 @@ client = OpenAI(
 
 def apply_custom_css():
     """
-    Apply custom CSS for a balanced, modern theme with a light background
-    and soft accent colors that ensure high readability.
+    Apply custom CSS for a balanced, modern theme.
     """
     st.markdown(
         """
         <style>
-        /* Import a modern sans-serif font */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-
-        /* Overall app background with a subtle gradient */
         .stApp {
             background: linear-gradient(180deg, #f9f9f9, #eaeaea);
             color: #333333;
             font-family: 'Roboto', sans-serif;
         }
-        
-        /* Main container styling */
         .main .block-container {
             max-width: 900px;
             background-color: #ffffff;
@@ -50,8 +45,6 @@ def apply_custom_css():
             margin: 2rem auto;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
         }
-        
-        /* Chat bubble for user messages */
         .stChatMessage-user {
             background-color: #d0e6ff !important;
             color: #0d1b2a !important;
@@ -61,8 +54,6 @@ def apply_custom_css():
             margin-bottom: 0.5rem;
             box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
         }
-        
-        /* Chat bubble for assistant messages */
         .stChatMessage-assistant {
             background-color: #dfffd8 !important;
             color: #0d1b2a !important;
@@ -72,15 +63,11 @@ def apply_custom_css():
             margin-bottom: 0.5rem;
             box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
         }
-        
-        /* Chat input area styling */
         .stChatInput {
             background-color: #ffffff !important;
             border-top: 1px solid #cccccc;
             padding: 1rem;
         }
-        
-        /* Chat input text box styling */
         .stChatInput textarea {
             background-color: #f4f4f4 !important;
             color: #333333 !important;
@@ -90,8 +77,6 @@ def apply_custom_css():
             padding: 0.6rem !important;
             font-size: 1rem;
         }
-        
-        /* Heading accent color */
         h1, h2, h3, h4, h5, h6 {
             color: #0066cc;
         }
@@ -112,9 +97,7 @@ def pdf_file_to_text(pdf_file):
     return text
 
 def upload_and_index_file(pdf_file_path):
-    """Uploads and indexes the PDF document into an OpenAI vector store.
-    See: https://platform.openai.com/docs/api-reference/vector-stores
-    """
+    """Uploads and indexes the PDF document into an OpenAI vector store."""
     with open(pdf_file_path, "rb") as file_stream:
         vector_store = client.vector_stores.create(name="TravClan Navigator Documents")
         client.vector_stores.file_batches.upload_and_poll(
@@ -123,10 +106,27 @@ def upload_and_index_file(pdf_file_path):
         )
     return vector_store
 
-def duckduckgo_web_search(query):
-    """Performs a search using the DuckDuckGo Instant Answer API.
-       Returns top result snippets as a combined string.
+def get_persistent_vector_store():
     """
+    Checks if a vector store ID exists in a local file.
+    If yes, retrieves the vector store; if not, creates a new one and saves the ID.
+    """
+    if os.path.exists(VECTOR_STORE_ID_FILE):
+        with open(VECTOR_STORE_ID_FILE, "r") as f:
+            vector_store_id = f.read().strip()
+        try:
+            vector_store = client.vector_stores.retrieve(vector_store_id)
+            return vector_store
+        except Exception as e:
+            st.error(f"Error retrieving persistent vector store: {e}")
+    # If not found or retrieval fails, create a new one.
+    vector_store = upload_and_index_file(PDF_FILE_PATH)
+    with open(VECTOR_STORE_ID_FILE, "w") as f:
+        f.write(vector_store.id)
+    return vector_store
+
+def duckduckgo_web_search(query):
+    """Performs a search using the DuckDuckGo Instant Answer API and returns result snippets."""
     params = {
         "q": query,
         "format": "json",
@@ -178,38 +178,53 @@ def generate_clarifying_question(user_question):
 def generate_answer(assistant_id, conversation_history, user_question):
     """
     Generates an answer using conversation history and the current user question.
-    If the response indicates insufficient internal data, a clarifying question is generated.
+    Uses internal context from the persistent vector store.
+    If the answer indicates insufficient data, a clarifying question is generated.
+    Additionally, if the query contains travel-specific keywords,
+    it combines doc-based results with live DuckDuckGo data.
     """
+    # Define keywords that might trigger live search
+    forced_search_keywords = ["hotel", "hotels", "flight", "flights", "restaurant", "restaurants"]
+    
     messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
     
     thread = client.beta.threads.create(messages=messages)
-    answer = ""
+    doc_based_answer = ""
     with client.beta.threads.runs.stream(thread_id=thread.id, assistant_id=assistant_id) as stream:
         for event in stream:
             if event.event == 'thread.message.delta':
                 for delta_block in event.data.delta.content:
                     if delta_block.type == 'text':
-                        answer += delta_block.text.value
+                        doc_based_answer += delta_block.text.value
     
-    if "answer not available in context" in answer.lower():
+    # If internal context is insufficient, generate a clarifying question.
+    if "answer not available in context" in doc_based_answer.lower():
         clarifying_question = generate_clarifying_question(user_question)
-        answer = clarifying_question
-
-    return answer
+        return clarifying_question
+    
+    # Otherwise, if the question contains certain keywords, perform a live web search.
+    if any(keyword in user_question.lower() for keyword in forced_search_keywords):
+        web_data = duckduckgo_web_search(user_question)
+        if web_data.strip():
+            combined_answer = f"{doc_based_answer}\n\nAdditional info from DuckDuckGo:\n{web_data}"
+            return combined_answer
+    return doc_based_answer
 
 def main():
-    apply_custom_css()  # Apply custom futuristic, high-contrast styling
-
+    apply_custom_css()  # Apply the custom CSS
+    
     st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
     st.write("Welcome! Ask about your trip, itinerary planning, or internal TravClan processes.")
     
+    # Maintain conversation history in session state.
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
     
+    # Use persistent vector store
     if "vector_store" not in st.session_state:
         with st.spinner("Indexing travel documents..."):
-            vector_store = upload_and_index_file(PDF_FILE_PATH)
+            vector_store = get_persistent_vector_store()
             st.session_state.vector_store = vector_store
             assistant = create_assistant_with_vector_store(vector_store)
             st.session_state.assistant = assistant
