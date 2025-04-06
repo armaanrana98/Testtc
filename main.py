@@ -3,8 +3,8 @@ from openai import OpenAI
 import PyPDF2
 import time
 import requests
-import uuid
 
+# Set up page configuration.
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
     page_icon="🌍🧭",
@@ -14,14 +14,92 @@ st.set_page_config(
 
 PDF_FILE_PATH = "data.pdf"
 
+# Retrieve API key from Streamlit secrets.
 openai_api_key = st.secrets["OPENAI_API_KEY"]
 
+# Initialize the OpenAI client with beta headers.
 client = OpenAI(
     api_key=openai_api_key,
     default_headers={"OpenAI-Beta": "assistants=v2"}
 )
 
+def apply_custom_css():
+    """
+    Apply custom CSS for a futuristic, dark, and high-contrast theme.
+    """
+    st.markdown(
+        """
+        <style>
+        /* Import futuristic font */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        /* Overall app styling */
+        .stApp {
+            background-color: #111111;
+            color: #FFFFFF;
+            font-family: 'Orbitron', sans-serif;
+        }
+        
+        /* Main container styling */
+        .main .block-container {
+            max-width: 900px;
+            background-color: #1e1e1e;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem auto;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* Chat bubble for user messages */
+        .stChatMessage-user {
+            background-color: #2F2C49 !important;
+            color: #FFFFFF !important;
+            border-radius: 10px;
+            padding: 1rem;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Chat bubble for assistant messages */
+        .stChatMessage-assistant {
+            background-color: #3A3762 !important;
+            color: #FFFFFF !important;
+            border-radius: 10px;
+            padding: 1rem;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            box-shadow: 0 0 10px rgba(0, 150, 136, 0.2);
+        }
+        
+        /* Chat input area styling */
+        .stChatInput {
+            background-color: #111111 !important;
+            border-top: 1px solid #333333;
+            padding: 1rem;
+        }
+        
+        /* Chat input text box styling */
+        .stChatInput textarea {
+            background-color: #2A2A2A !important;
+            color: #FFFFFF !important;
+            border: 1px solid #555555 !important;
+            border-radius: 8px !important;
+            font-family: 'Orbitron', sans-serif;
+            padding: 0.6rem !important;
+        }
+        
+        /* Heading accent color */
+        h1, h2, h3, h4, h5, h6 {
+            color: #FDB813;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 def pdf_file_to_text(pdf_file):
+    """Extract text from a PDF using PyPDF2."""
     text = ""
     with open(pdf_file, 'rb') as file:
         reader = PyPDF2.PdfReader(file)
@@ -32,6 +110,9 @@ def pdf_file_to_text(pdf_file):
     return text
 
 def upload_and_index_file(pdf_file_path):
+    """Uploads and indexes the PDF document into an OpenAI vector store.
+    See: https://platform.openai.com/docs/api-reference/vector-stores
+    """
     with open(pdf_file_path, "rb") as file_stream:
         vector_store = client.vector_stores.create(name="TravClan Navigator Documents")
         client.vector_stores.file_batches.upload_and_poll(
@@ -40,7 +121,29 @@ def upload_and_index_file(pdf_file_path):
         )
     return vector_store
 
+def duckduckgo_web_search(query):
+    """Performs a search using the DuckDuckGo Instant Answer API.
+       Returns top result snippets as a combined string.
+    """
+    params = {
+        "q": query,
+        "format": "json",
+        "no_html": 1,
+        "skip_disambig": 1
+    }
+    response = requests.get("https://api.duckduckgo.com/", params=params)
+    data = response.json()
+    snippets = []
+    if data.get("AbstractText"):
+        snippets.append(data["AbstractText"])
+    if data.get("RelatedTopics"):
+        for topic in data["RelatedTopics"]:
+            if isinstance(topic, dict) and topic.get("Text"):
+                snippets.append(topic["Text"])
+    return "\n".join(snippets)
+
 def create_assistant_with_vector_store(vector_store):
+    """Creates an assistant that uses the vector store for context."""
     assistant = client.beta.assistants.create(
         name="TravClan Navigator Assistant",
         instructions=(
@@ -56,10 +159,11 @@ def create_assistant_with_vector_store(vector_store):
     return assistant
 
 def generate_clarifying_question(user_question):
+    """Generates a clarifying question using GPT-4o based on the user's travel query."""
     prompt = (
         f"You are a travel expert. The user asked:\n\n"
         f"\"{user_question}\"\n\n"
-        "What is one concise clarifying question you should ask to gather more travel details? "
+        "What is one concise clarifying question you should ask to gather more specific travel details? "
         "Return only the question."
     )
     response = client.ChatCompletion.create(
@@ -70,6 +174,10 @@ def generate_clarifying_question(user_question):
     return response["choices"][0]["message"]["content"].strip()
 
 def generate_answer(assistant_id, conversation_history, user_question):
+    """
+    Generates an answer using conversation history and the current user question.
+    If the response indicates insufficient internal data, a clarifying question is generated.
+    """
     messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
     
@@ -88,168 +196,44 @@ def generate_answer(assistant_id, conversation_history, user_question):
 
     return answer
 
-def apply_chat_widget_css():
-    """
-    This CSS + HTML layout tries to replicate a floating chat widget in the bottom-right corner
-    with a pink top bar, small bubble style, etc.
-    """
-    st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
-    body, .stApp {
-        background-color: #f1f1f1;
-        font-family: 'Orbitron', sans-serif;
-    }
-    /* Container for entire chat widget */
-    #chatWidget {
-        position: fixed;
-        bottom: 30px;
-        right: 30px;
-        width: 350px;
-        height: 500px;
-        background-color: #fff;
-        border-radius: 10px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        display: flex;
-        flex-direction: column;
-        z-index: 9999;
-    }
-    /* Pink top bar */
-    #chatHeader {
-        background-color: #ff5a9f;
-        color: #fff;
-        padding: 10px;
-        border-radius: 10px 10px 0 0;
-        text-align: center;
-        font-weight: bold;
-    }
-    /* Chat body where messages appear */
-    #chatBody {
-        flex: 1;
-        padding: 10px;
-        overflow-y: auto;
-        background-color: #f9f9f9;
-    }
-    /* Chat message bubble style */
-    .chat-bubble {
-        max-width: 80%;
-        margin-bottom: 10px;
-        padding: 8px 12px;
-        border-radius: 16px;
-        line-height: 1.4;
-        font-size: 0.95rem;
-        color: #333;
-    }
-    .chat-bubble.user {
-        background-color: #d1e8ff;
-        margin-left: auto;
-    }
-    .chat-bubble.assistant {
-        background-color: #ebebeb;
-        margin-right: auto;
-    }
-    /* Chat footer with input and button */
-    #chatFooter {
-        padding: 10px;
-        border-top: 1px solid #ccc;
-        background-color: #f3f3f3;
-    }
-    #chatInputBox {
-        width: calc(100% - 60px);
-        padding: 8px;
-        border-radius: 4px;
-        border: 1px solid #ccc;
-        font-family: 'Orbitron', sans-serif;
-    }
-    #sendBtn {
-        background-color: #ff5a9f;
-        color: #fff;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 4px;
-        cursor: pointer;
-        margin-left: 5px;
-        font-family: 'Orbitron', sans-serif;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 def main():
-    st.title("TravClan Navigator 🌍🧭 (Page)")  # Title for the overall page
-    st.write("This is your main page content. The chat widget floats at the bottom-right corner.")
-
-    # If we haven't created a vector store yet, do so.
+    apply_custom_css()  # Apply the futuristic dark theme
+    
+    st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
+    st.write("Welcome! Ask about your trip, itinerary planning, or internal TravClan processes.")
+    
+    if "conversation_history" not in st.session_state:
+        st.session_state.conversation_history = []
+    
     if "vector_store" not in st.session_state:
         with st.spinner("Indexing travel documents..."):
             vector_store = upload_and_index_file(PDF_FILE_PATH)
             st.session_state.vector_store = vector_store
-            st.session_state.assistant = create_assistant_with_vector_store(vector_store)
+            assistant = create_assistant_with_vector_store(vector_store)
+            st.session_state.assistant = assistant
     else:
-        pass  # already created
-
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = []
-
-    # Insert the floating chat widget HTML
-    apply_chat_widget_css()
-    st.markdown("""
-    <div id="chatWidget">
-      <div id="chatHeader">
-        <span>Chat bot</span>
-      </div>
-      <div id="chatBody">
-        <!-- This is where messages will appear -->
-    """, unsafe_allow_html=True)
-
-    # Display existing messages from session_state.conversation
-    for message in st.session_state.conversation:
-        role = message["role"]
-        content = message["content"]
-        bubble_class = "assistant" if role == "assistant" else "user"
-        st.markdown(f"""
-          <div class="chat-bubble {bubble_class}">
-            {content}
-          </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("""
-      </div>
-      <div id="chatFooter">
-        <form action="#" method="post" onsubmit="var inputBox = document.getElementById('chatInputBox'); 
-                                               window.parent.streamlitSendMessage(inputBox.value);
-                                               inputBox.value=''; 
-                                               return false;">
-          <input type="text" id="chatInputBox" placeholder="Ask anything..." />
-          <button id="sendBtn" type="submit">Send</button>
-        </form>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Use a hidden Streamlit input to handle messages from the chat form
-    # We'll store them in st.session_state and re-render
-    user_msg = st.text_input("Hidden Chat Input", key="hidden_chat_input", label_visibility="collapsed")
+        assistant = st.session_state.assistant
     
-    # This hack: We'll define a custom JavaScript to capture form submit from the HTML
-    # and set st.session_state["hidden_chat_input"] to the user text.
-    # But this approach is quite advanced and might require a custom Streamlit component.
-    # Instead, we can do a simpler approach with a direct form submission.
-
-    # We'll do a quick approach:
-    # If the user typed something in hidden_chat_input, handle it.
-    if user_msg:
-        # Add user message
-        st.session_state.conversation.append({"role": "user", "content": user_msg})
-        # Generate answer
-        assistant_id = st.session_state.assistant.id
-        answer = generate_answer(
-            assistant_id,
-            st.session_state.conversation,
-            user_msg
-        )
-        st.session_state.conversation.append({"role": "assistant", "content": answer})
-        # Force rerun so we see the updated conversation
-        st.experimental_rerun()
+    # Display the conversation using Streamlit's chat UI.
+    for msg in st.session_state.conversation_history:
+        if msg["role"] == "user":
+            with st.chat_message("user"):
+                st.write(msg["content"])
+        else:
+            with st.chat_message("assistant"):
+                st.write(msg["content"])
+    
+    user_question = st.chat_input("Type your travel question here...")
+    
+    if user_question:
+        with st.chat_message("user"):
+            st.write(user_question)
+        with st.spinner("Processing your query..."):
+            answer = generate_answer(assistant.id, st.session_state.conversation_history, user_question)
+        st.session_state.conversation_history.append({"role": "user", "content": user_question})
+        st.session_state.conversation_history.append({"role": "assistant", "content": answer})
+        with st.chat_message("assistant"):
+            st.write(answer)
 
 if __name__ == "__main__":
     main()
