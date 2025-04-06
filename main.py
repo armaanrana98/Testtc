@@ -13,7 +13,7 @@ st.set_page_config(
 
 PDF_FILE_PATH = "data.pdf"
 
-# Retrieve API key from Streamlit secrets
+# Retrieve API key from Streamlit secrets.
 openai_api_key = st.secrets["OPENAI_API_KEY"]
 
 # Initialize the OpenAI client with beta headers for assistants and vector stores.
@@ -84,11 +84,30 @@ def create_assistant_with_vector_store(vector_store):
     )
     return assistant
 
+def generate_clarifying_question(user_question):
+    """
+    Generates a clarifying question using GPT-4o based on the user's travel query.
+    For example, if a user asks about a Dubai trip, it might ask: "How many nights are you planning to stay?"
+    """
+    prompt = (
+        f"You are a travel expert assisting users in planning trips. Given the user's query:\n\n"
+        f"\"{user_question}\"\n\n"
+        "What is one concise clarifying question you should ask to get more specific travel details? "
+        "Return only the question."
+    )
+    response = client.ChatCompletion.create(
+        model="gpt-4o",  # Using GPT-4o for all tasks.
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=50
+    )
+    clarifying_question = response["choices"][0]["message"]["content"].strip()
+    return clarifying_question
+
 def generate_answer(assistant_id, conversation_history, user_question):
     """
     Generates an answer using conversation history and the current user question.
-    If the response indicates insufficient internal data (by including "answer not available in context"),
-    it asks a clarifying follow-up question, e.g., "How many nights are you planning to stay?"
+    If the response indicates insufficient internal data (i.e. contains "answer not available in context"),
+    dynamically generates a clarifying question using GPT-4o.
     """
     messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
@@ -106,11 +125,9 @@ def generate_answer(assistant_id, conversation_history, user_question):
                         answer += delta_block.text.value
     end_time = time.time()
     
-    # Check if internal documents lack the required details.
+    # If the internal documents lack required details, dynamically ask for clarification.
     if "answer not available in context" in answer.lower():
-        # Instead of performing a web search, ask a clarifying question.
-        clarifying_question = ("It appears that our internal documents don't contain specific travel details for your query. "
-                                "Could you please tell me how many nights you plan to stay?")
+        clarifying_question = generate_clarifying_question(user_question)
         answer = clarifying_question
 
     return answer
@@ -132,7 +149,7 @@ def main():
     else:
         assistant = st.session_state.assistant
     
-    # Display existing chat messages using Streamlit's chat UI.
+    # Display existing conversation using Streamlit's chat UI.
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
@@ -141,7 +158,7 @@ def main():
             with st.chat_message("assistant"):
                 st.write(msg["content"])
     
-    # Use st.chat_input for user input (requires Streamlit >= 1.74)
+    # Use st.chat_input for user input.
     user_question = st.chat_input("Type your travel question here...")
     
     if user_question:
