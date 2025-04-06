@@ -3,7 +3,6 @@ from openai import OpenAI
 import PyPDF2
 import time
 import requests
-import os
 
 st.set_page_config(
     page_title="TravClan Navigator 🌍🧭",
@@ -49,7 +48,7 @@ def upload_and_index_file(pdf_file_path):
     return vector_store
 
 def duckduckgo_web_search(query):
-    """Performs a search using DuckDuckGo Instant Answer API.
+    """Performs a search using the DuckDuckGo Instant Answer API.
        Returns top result snippets as a combined string.
     """
     params = {
@@ -71,7 +70,7 @@ def duckduckgo_web_search(query):
 
 def create_assistant_with_vector_store(vector_store):
     """Creates an assistant that uses the vector store for context.
-       (Note: We removed the 'web_search' tool since only 'file_search' is supported.)
+       (Only 'file_search' is supported.)
     """
     assistant = client.beta.assistants.create(
         name="TravClan Navigator Assistant",
@@ -88,14 +87,14 @@ def create_assistant_with_vector_store(vector_store):
     return assistant
 
 def generate_answer(assistant_id, conversation_history, user_question):
-    """Generates an answer using conversation history and the current user question.
-       If the response indicates insufficient internal data, perform a DuckDuckGo web search.
+    """Generates an answer using conversation history and the current question.
+       If the response indicates insufficient internal data, performs a DuckDuckGo web search.
     """
-    messages = [{"role": "system", "content": "You are a helpful travel assistant."}]
-    messages.extend(conversation_history)
+    # Use conversation history and append the current query as a "user" message.
+    messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
     
-    # Create a thread for the conversation.
+    # Create a conversation thread.
     thread = client.beta.threads.create(messages=messages)
     answer = ""
     start_time = time.time()
@@ -108,7 +107,7 @@ def generate_answer(assistant_id, conversation_history, user_question):
                         answer += delta_block.text.value
     end_time = time.time()
     
-    # If internal context is insufficient, do a live DuckDuckGo web search.
+    # If internal context is insufficient, trigger a live DuckDuckGo search.
     if "answer not available in context" in answer.lower():
         web_data = duckduckgo_web_search(user_question)
         answer += "\n\nAdditional live information from DuckDuckGo:\n" + web_data
@@ -118,11 +117,11 @@ def generate_answer(assistant_id, conversation_history, user_question):
 def main():
     st.header("TravClan Navigator 🌍🧭 - Your Travel Assistant")
     
-    # Maintain conversation history in session state.
+    # Use session state to store conversation history.
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
     
-    # Index the PDF and create the vector store and assistant only once.
+    # Upload and index the PDF and create the assistant only once.
     if "vector_store" not in st.session_state:
         with st.spinner("Indexing travel documents..."):
             vector_store = upload_and_index_file(PDF_FILE_PATH)
@@ -130,16 +129,16 @@ def main():
             assistant = create_assistant_with_vector_store(vector_store)
             st.session_state.assistant = assistant
     else:
-        vector_store = st.session_state.vector_store
         assistant = st.session_state.assistant
     
+    # Streamlit Chat UI.
     user_question = st.text_input("Enter your travel question:")
     
     if st.button("Ask"):
         if user_question.strip():
             with st.spinner("Processing your query..."):
                 answer = generate_answer(assistant.id, st.session_state.conversation_history, user_question)
-                # Append current question and answer to conversation history.
+                # Append the current query and answer to conversation history.
                 st.session_state.conversation_history.append({"role": "user", "content": user_question})
                 st.session_state.conversation_history.append({"role": "assistant", "content": answer})
                 st.write(answer)
