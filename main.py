@@ -6,7 +6,7 @@ import requests
 import os
 
 st.set_page_config(
-    page_title="TravClan Navigator 🌍🧭",
+    page_title="Travvy 🌍🧭",
     page_icon="🌍🧭",
     layout="centered",
     initial_sidebar_state="auto"
