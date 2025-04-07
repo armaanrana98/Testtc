@@ -244,7 +244,7 @@ def generate_answer(assistant_id, conversation_history, user_question):
 def main():
     apply_custom_css()  # Apply custom styling
 
-    st.title("TravClan Navigator 🌍🧭 - Your Travel Assistant")
+    st.title("Travvy 🌍🧭 - Your Travel Assistant")
     st.write("Welcome! Ask about your trip, itinerary planning, or internal TravClan processes.")
 
     if "conversation_history" not in st.session_state:
