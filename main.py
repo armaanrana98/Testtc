@@ -26,23 +26,23 @@ client = OpenAI(
 
 def apply_custom_css():
     """
-    Apply custom CSS that ensures proper contrast and visibility on a black background,
-    with accent colors for a premium, modern feel.
+    Ensures chat response text is clearly visible on a black/dark background
+    with accent colors for a clean, premium look.
     """
     st.markdown(
         """
         <style>
-        /* Import a modern font (Roboto) */
+        /* Import a modern font */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
-        /* Overall app styling: black background, white text */
+        /* Overall app styling (black bg, white text) */
         .stApp {
             background-color: #000000;
             color: #ffffff;
             font-family: 'Roboto', sans-serif;
         }
 
-        /* Main container with a darker gray tone and subtle shadow for contrast */
+        /* Main container with dark gray background and subtle shadow */
         .main .block-container {
             max-width: 900px;
             background-color: #1a1a1a;
@@ -52,43 +52,53 @@ def apply_custom_css():
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
         }
 
-        /* Headings with an accent color */
-        h1, h2, h3, h4, h5, h6 {
-            color: #ffb000; /* Adjust this accent color to match your brand */
+        /* Force white text within chat messages (Markdown can override color otherwise) */
+        .stChatMessage .stMarkdown, 
+        .stChatMessage .stMarkdown p, 
+        .stChatMessage .stMarkdown span, 
+        .stChatMessage .stMarkdown div {
+            color: #ffffff !important;
         }
 
-        /* User messages: slightly lighter dark background + accent-colored left border */
+        /* Make sure links in messages are visible */
+        .stChatMessage .stMarkdown a {
+            color: #ffb000 !important; /* Accent color for links */
+            text-decoration: none;
+        }
+        .stChatMessage .stMarkdown a:hover {
+            text-decoration: underline;
+        }
+
+        /* User messages: slightly lighter dark background + left accent border */
         .stChatMessage-user {
             background-color: #2a2a2a !important;
-            color: #ffffff !important;
-            border-left: 4px solid #ffb000 !important; /* Accent color border */
+            border-left: 4px solid #ffb000 !important; 
             border-radius: 8px;
             padding: 1rem;
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
-        /* Assistant messages: a different shade for contrast + blue accent border */
+        /* Assistant messages: a different shade + accent border */
         .stChatMessage-assistant {
             background-color: #333333 !important;
-            color: #ffffff !important;
-            border-left: 4px solid #1f78ff !important; /* Different accent color for assistant */
+            border-left: 4px solid #1f78ff !important; /* Blue accent for the assistant */
             border-radius: 8px;
             padding: 1rem;
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
-        /* Chat input area: keep black background and a subtle top border */
+        /* Chat input area: black background, subtle top border */
         .stChatInput {
             background-color: #000000 !important;
             border-top: 1px solid #444444;
             padding: 1rem;
         }
 
-        /* Chat input textarea: darker gray with white text */
+        /* Chat input textarea: dark gray with white text */
         .stChatInput textarea {
             background-color: #1a1a1a !important;
             color: #ffffff !important;
@@ -100,12 +110,12 @@ def apply_custom_css():
             width: 100% !important;
         }
 
-        /* Placeholder text within the chat input */
+        /* Placeholder text in the chat input */
         .stChatInput textarea::placeholder {
-            color: #888888; /* A lighter gray so users see the placeholder text */
+            color: #888888; 
         }
 
-        /* Send button styling: accent background with hover effect */
+        /* Send button: golden accent */
         .stChatInput button {
             background-color: #ffb000 !important;
             color: #000000 !important;
@@ -125,6 +135,7 @@ def apply_custom_css():
         """,
         unsafe_allow_html=True
     )
+
 
 
 def pdf_file_to_text(pdf_file):
