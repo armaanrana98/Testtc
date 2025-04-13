@@ -148,7 +148,7 @@ def kayak_hotel_search(location, checkin_date, checkout_date, num_adults=2):
     """
     url = f"https://www.kayak.co.in/hotels/{location}/{checkin_date}/{checkout_date}/{num_adults}adults"
     st.write(f"Generated hotel search URL: {url}")
-    # Load the page with Browserbase to simulate a browser-based fetch.
+    # Use Browserbase to load the URL (for dynamic content)
     browserbase(url)
     return f"Kayak hotel search URL: {url}"
 
@@ -247,12 +247,12 @@ def generate_answer(assistant_id, conversation_history, user_question):
 
     additional_results = ""
     
-    # If "hotel" appears in the query, invoke the browser-based hotel search.
+    # If the query mentions "hotel", invoke the browser-based hotel search.
     if "hotel" in user_question.lower():
         hotels_result = kayak_hotel_search(location="new-york", checkin_date="2025-06-01", checkout_date="2025-06-05")
         additional_results += "\n\nHotel Search Result:\n" + hotels_result
     
-    # If "flight" appears in the query, invoke the browser-based flight search.
+    # If the query mentions "flight", invoke the browser-based flight search.
     if "flight" in user_question.lower():
         flights_result = kayak_flight_search(origin="JFK", destination="LAX", depart_date="2025-06-01", return_date="2025-06-05")
         additional_results += "\n\nFlight Search Result:\n" + flights_result
