@@ -3,4 +3,4 @@ PyPDF2
 openai
 mysql-connector-python
 requests
-beautifulsoup4
+browserbase 
