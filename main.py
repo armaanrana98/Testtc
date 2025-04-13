@@ -26,62 +26,69 @@ client = OpenAI(
 
 def apply_custom_css():
     """
-    Apply custom CSS to use a full black background and a premium, high-contrast UI.
-    The main container uses a dark gray tone so elements stand out.
+    Apply custom CSS that ensures proper contrast and visibility on a black background,
+    with accent colors for a premium, modern feel.
     """
     st.markdown(
         """
         <style>
-        /* Import Roboto font for a modern, premium look */
+        /* Import a modern font (Roboto) */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
-        /* Overall app styling with black background and white text */
+        /* Overall app styling: black background, white text */
         .stApp {
             background-color: #000000;
             color: #ffffff;
             font-family: 'Roboto', sans-serif;
         }
-        
-        /* Main container styling with dark gray background and subtle shadow */
+
+        /* Main container with a darker gray tone and subtle shadow for contrast */
         .main .block-container {
             max-width: 900px;
             background-color: #1a1a1a;
             border-radius: 12px;
             padding: 2rem;
             margin: 2rem auto;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
         }
-        
-        /* Chat bubble for user messages: dark gray background with white text */
+
+        /* Headings with an accent color */
+        h1, h2, h3, h4, h5, h6 {
+            color: #ffb000; /* Adjust this accent color to match your brand */
+        }
+
+        /* User messages: slightly lighter dark background + accent-colored left border */
         .stChatMessage-user {
             background-color: #2a2a2a !important;
             color: #ffffff !important;
-            border-radius: 10px;
+            border-left: 4px solid #ffb000 !important; /* Accent color border */
+            border-radius: 8px;
             padding: 1rem;
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
-            box-shadow: 0 0 8px rgba(255, 255, 255, 0.05);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-        
-        /* Chat bubble for assistant messages: a slightly darker gray for contrast */
+
+        /* Assistant messages: a different shade for contrast + blue accent border */
         .stChatMessage-assistant {
             background-color: #333333 !important;
             color: #ffffff !important;
-            border-radius: 10px;
+            border-left: 4px solid #1f78ff !important; /* Different accent color for assistant */
+            border-radius: 8px;
             padding: 1rem;
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
-            box-shadow: 0 0 8px rgba(255, 255, 255, 0.05);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-        
-        /* Chat input area styling matching the dark theme */
+
+        /* Chat input area: keep black background and a subtle top border */
         .stChatInput {
             background-color: #000000 !important;
             border-top: 1px solid #444444;
             padding: 1rem;
         }
-        
-        /* Chat input text box styling: dark gray background with white text */
+
+        /* Chat input textarea: darker gray with white text */
         .stChatInput textarea {
             background-color: #1a1a1a !important;
             color: #ffffff !important;
@@ -90,16 +97,35 @@ def apply_custom_css():
             font-family: 'Roboto', sans-serif;
             padding: 0.6rem !important;
             font-size: 1rem;
+            width: 100% !important;
         }
-        
-        /* Headings with a soft white color */
-        h1, h2, h3, h4, h5, h6 {
-            color: #e6e6e6;
+
+        /* Placeholder text within the chat input */
+        .stChatInput textarea::placeholder {
+            color: #888888; /* A lighter gray so users see the placeholder text */
         }
+
+        /* Send button styling: accent background with hover effect */
+        .stChatInput button {
+            background-color: #ffb000 !important;
+            color: #000000 !important;
+            border: none !important;
+            border-radius: 8px !important;
+            font-size: 1rem !important;
+            font-weight: 600 !important;
+            padding: 0.6rem 1rem !important;
+            margin-left: 0.5rem !important;
+            cursor: pointer;
+        }
+        .stChatInput button:hover {
+            background-color: #e0a000 !important;
+        }
+
         </style>
         """,
         unsafe_allow_html=True
     )
+
 
 def pdf_file_to_text(pdf_file):
     """Extract text from a PDF using PyPDF2."""
