@@ -26,76 +26,75 @@ client = OpenAI(
 
 def apply_custom_css():
     """
-    Apply custom CSS for a balanced, modern theme.
-    This version uses a light container background with pastel chat bubbles,
-    ensuring that text remains dark and easily readable.
+    Apply custom CSS to use a full black background and a premium, high-contrast UI.
+    The main container uses a dark gray tone so elements stand out.
     """
     st.markdown(
         """
         <style>
-        /* Import Roboto font for a modern look */
+        /* Import Roboto font for a modern, premium look */
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
-        /* Overall app styling */
+        /* Overall app styling with black background and white text */
         .stApp {
-            background: linear-gradient(180deg, #f9f9f9, #eaeaea);
-            color: #333333;
+            background-color: #000000;
+            color: #ffffff;
             font-family: 'Roboto', sans-serif;
         }
         
-        /* Main container styling */
+        /* Main container styling with dark gray background and subtle shadow */
         .main .block-container {
             max-width: 900px;
-            background-color: #ffffff;
+            background-color: #1a1a1a;
             border-radius: 12px;
             padding: 2rem;
             margin: 2rem auto;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
         }
         
-        /* Chat bubble for user messages: pastel blue background with dark text */
+        /* Chat bubble for user messages: dark gray background with white text */
         .stChatMessage-user {
-            background-color: #d0e6ff !important;
-            color: #0d1b2a !important;
+            background-color: #2a2a2a !important;
+            color: #ffffff !important;
             border-radius: 10px;
             padding: 1rem;
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
-            box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.05);
         }
         
-        /* Chat bubble for assistant messages: pastel green background with dark text */
+        /* Chat bubble for assistant messages: a slightly darker gray for contrast */
         .stChatMessage-assistant {
-            background-color: #dfffd8 !important;
-            color: #0d1b2a !important;
+            background-color: #333333 !important;
+            color: #ffffff !important;
             border-radius: 10px;
             padding: 1rem;
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
-            box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.05);
         }
         
-        /* Chat input area styling */
+        /* Chat input area styling matching the dark theme */
         .stChatInput {
-            background-color: #ffffff !important;
-            border-top: 1px solid #cccccc;
+            background-color: #000000 !important;
+            border-top: 1px solid #444444;
             padding: 1rem;
         }
         
-        /* Chat input text box styling: light gray background with dark text */
+        /* Chat input text box styling: dark gray background with white text */
         .stChatInput textarea {
-            background-color: #f4f4f4 !important;
-            color: #333333 !important;
-            border: 1px solid #cccccc !important;
+            background-color: #1a1a1a !important;
+            color: #ffffff !important;
+            border: 1px solid #444444 !important;
             border-radius: 8px !important;
             font-family: 'Roboto', sans-serif;
             padding: 0.6rem !important;
             font-size: 1rem;
         }
         
-        /* Headings accent color */
+        /* Headings with a soft white color */
         h1, h2, h3, h4, h5, h6 {
-            color: #0066cc;
+            color: #e6e6e6;
         }
         </style>
         """,
