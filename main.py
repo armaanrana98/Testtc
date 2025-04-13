@@ -2,9 +2,8 @@ import streamlit as st
 from openai import OpenAI
 import PyPDF2
 import time
-import requests
 import os
-from bs4 import BeautifulSoup  # Added for parsing Kayak HTML
+from browserbase import browserbase  # Using Browserbase for browser-based loads
 
 st.set_page_config(
     page_title="Travvy 🌍🧭",
@@ -133,49 +132,29 @@ def get_persistent_vector_store():
         st.error(f"Error retrieving persistent vector store: {e}")
         return None
 
-def kayak_hotel_search(location, checkin_date, checkout_date):
+# --- Browserbase-Based Kayak Search Functions ---
+def kayak_hotel_search(location, checkin_date, checkout_date, num_adults=2):
     """
-    Searches for hotels on Kayak for a given location and date range.
+    Generates a Kayak URL for hotel searches and calls Browserbase to load the page.
     
     Parameters:
-    - location: A string indicating the destination (e.g., "new-york").
-    - checkin_date: Check-in date in the format YYYY-MM-DD.
-    - checkout_date: Check-out date in the format YYYY-MM-DD.
+    - location: A string representing the search location (formatted per Kayak's requirements).
+    - checkin_date: Check-in date in YYYY-MM-DD format.
+    - checkout_date: Check-out date in YYYY-MM-DD format.
+    - num_adults: Number of adults (default is 2).
     
     Returns:
-    - A list of dictionaries containing hotel information.
+    - A string containing the generated Kayak hotel search URL.
     """
-    # Construct the search URL (adjust the URL pattern as needed)
-    search_url = f"https://www.kayak.com/hotels/{location}/{checkin_date}/{checkout_date}"
-    
-    headers = {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/91.0.4472.124 Safari/537.36")
-    }
-    
-    response = requests.get(search_url, headers=headers)
-    hotels = []
-    
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, "html.parser")
-        # Note: The CSS selectors below are indicative.
-        # You may need to adjust these based on Kayak's current HTML structure.
-        for hotel_card in soup.find_all("div", class_="hotelCard"):
-            try:
-                name = hotel_card.find("span", class_="hotelName").get_text(strip=True)
-                price = hotel_card.find("span", class_="price").get_text(strip=True)
-                hotels.append({"name": name, "price": price})
-            except AttributeError:
-                continue
-    else:
-        st.error("Error: Unable to fetch hotel data from Kayak.")
-    
-    return hotels
+    url = f"https://www.kayak.co.in/hotels/{location}/{checkin_date}/{checkout_date}/{num_adults}adults"
+    st.write(f"Generated hotel search URL: {url}")
+    # Load the page with Browserbase to simulate a browser-based fetch.
+    browserbase(url)
+    return f"Kayak hotel search URL: {url}"
 
 def kayak_flight_search(origin, destination, depart_date, return_date):
     """
-    Searches for flights on Kayak between two destinations.
+    Generates a Kayak URL for flight searches and calls Browserbase.
     
     Parameters:
     - origin: Departure airport or city code.
@@ -184,34 +163,12 @@ def kayak_flight_search(origin, destination, depart_date, return_date):
     - return_date: Return date in YYYY-MM-DD format.
     
     Returns:
-    - A list of dictionaries containing flight details.
+    - A string containing the generated Kayak flight search URL.
     """
-    # Construct the flight search URL (adjust the URL pattern as needed)
-    search_url = f"https://www.kayak.com/flights/{origin}-{destination}/{depart_date}/{return_date}"
-    
-    headers = {
-        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/91.0.4472.124 Safari/537.36")
-    }
-    
-    response = requests.get(search_url, headers=headers)
-    flights = []
-    
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, "html.parser")
-        # Note: These CSS selectors are placeholders and might need updating.
-        for flight_card in soup.find_all("div", class_="flightCard"):
-            try:
-                airline = flight_card.find("span", class_="airline").get_text(strip=True)
-                cost = flight_card.find("span", class_="price").get_text(strip=True)
-                flights.append({"airline": airline, "price": cost})
-            except AttributeError:
-                continue
-    else:
-        st.error("Error: Unable to fetch flight data from Kayak.")
-    
-    return flights
+    url = f"https://www.kayak.co.in/flights/{origin}-{destination}/{depart_date}/{return_date}"
+    st.write(f"Generated flight search URL: {url}")
+    browserbase(url)
+    return f"Kayak flight search URL: {url}"
 
 def create_assistant_with_vector_store(vector_store):
     """
@@ -236,8 +193,7 @@ def create_assistant_with_vector_store(vector_store):
 
 def generate_clarifying_question(user_question):
     """
-    Uses GPT-4o to generate a single, concise clarifying question that gathers additional details
-    necessary to produce a complete travel recommendation.
+    Uses GPT-4o to generate a single, concise clarifying question for additional travel details.
     """
     prompt = (
         f"You are a seasoned travel expert. The user asked:\n\n"
@@ -254,7 +210,7 @@ def generate_clarifying_question(user_question):
 
 def generate_generic_itinerary(user_question):
     """
-    Uses GPT-4o to generate a best-effort itinerary when internal documents lack sufficient details.
+    Uses GPT-4o to generate a generic travel itinerary when internal documents do not have enough details.
     """
     prompt = (
         f"You are an expert travel planner. The user asked: \"{user_question}\". "
@@ -270,12 +226,8 @@ def generate_generic_itinerary(user_question):
 
 def generate_answer(assistant_id, conversation_history, user_question):
     """
-    Generates an answer using conversation history and the user's current question.
-    1. Retrieves an answer based on internal document context.
-    2. If the internal content is insufficient (i.e. returns 'answer not available in context'),
-       then generate a generic itinerary using GPT-4o.
-    3. Additionally, if the user query contains specific travel keywords ("hotel" or "flight"), 
-       perform live Kayak searches and append those results.
+    Generates an answer using the internal document context and appends additional Kayak search results (for hotels or flights)
+    using Browserbase when relevant keywords are detected in the query.
     """
     messages = conversation_history.copy()
     messages.append({"role": "user", "content": user_question})
@@ -289,28 +241,21 @@ def generate_answer(assistant_id, conversation_history, user_question):
                     if delta_block.type == 'text':
                         doc_based_answer += delta_block.text.value
 
-    # Fallback to a generic itinerary if internal content is insufficient.
+    # If internal context is insufficient, fall back to generating a generic itinerary.
     if "answer not available in context" in doc_based_answer.lower():
         doc_based_answer = generate_generic_itinerary(user_question)
 
     additional_results = ""
     
-    # Incorporate Kayak hotel search if the query contains "hotel"
+    # If "hotel" appears in the query, invoke the browser-based hotel search.
     if "hotel" in user_question.lower():
-        # Hardcoded example parameters; customize or extract from user input as needed.
-        hotels = kayak_hotel_search(location="new-york", checkin_date="2025-06-01", checkout_date="2025-06-05")
-        if hotels:
-            additional_results += "\n\nTop Hotels:\n"
-            for hotel in hotels[:5]:  # Limit to top 5 results
-                additional_results += f"- {hotel['name']}: {hotel['price']}\n"
+        hotels_result = kayak_hotel_search(location="new-york", checkin_date="2025-06-01", checkout_date="2025-06-05")
+        additional_results += "\n\nHotel Search Result:\n" + hotels_result
     
-    # Incorporate Kayak flight search if the query contains "flight"
+    # If "flight" appears in the query, invoke the browser-based flight search.
     if "flight" in user_question.lower():
-        flights = kayak_flight_search(origin="JFK", destination="LAX", depart_date="2025-06-01", return_date="2025-06-05")
-        if flights:
-            additional_results += "\n\nTop Flights:\n"
-            for flight in flights[:5]:
-                additional_results += f"- {flight['airline']}: {flight['price']}\n"
+        flights_result = kayak_flight_search(origin="JFK", destination="LAX", depart_date="2025-06-01", return_date="2025-06-05")
+        additional_results += "\n\nFlight Search Result:\n" + flights_result
 
     if additional_results:
         return f"{doc_based_answer}\n\n{additional_results}"
@@ -325,7 +270,7 @@ def main():
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
     
-    # Retrieve persistent vector store using provided ID.
+    # Retrieve persistent vector store (or create it if not already in session).
     if "vector_store" not in st.session_state:
         with st.spinner("Retrieving travel documents..."):
             vector_store = client.vector_stores.retrieve(PERSISTENT_VECTOR_STORE_ID)
@@ -335,7 +280,7 @@ def main():
     else:
         assistant = st.session_state.assistant
 
-    # Display existing conversation using Streamlit's chat UI.
+    # Display conversation history using Streamlit's chat UI.
     for msg in st.session_state.conversation_history:
         if msg["role"] == "user":
             with st.chat_message("user"):
